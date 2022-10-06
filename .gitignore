@@ -1,4 +1,6 @@
 /target
 
+# Ignore all ROMs except for tests
 **/*.gb
 **/*.gbc
+!tests/*
