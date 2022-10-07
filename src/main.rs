@@ -1,4 +1,4 @@
-use gemboy::cpu::Cpu;
+use metalboy::cpu::Cpu;
 
 fn main() {
     // Create CPU
