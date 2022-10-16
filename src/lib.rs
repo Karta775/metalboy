@@ -2,6 +2,7 @@ pub mod mmu;
 pub mod cpu;
 pub mod registers;
 pub mod cartridge;
+pub mod system;
 
 fn word_from(left: u8, right: u8) -> u16 {
     (left as u16) << 8 | right as u16
