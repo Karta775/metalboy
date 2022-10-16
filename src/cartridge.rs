@@ -1,4 +1,3 @@
-use std::fs;
 use std::fs::File;
 use std::io::Read;
 
@@ -7,18 +6,16 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn new(rom_path: &str) -> Self {
+    pub fn new() -> Self {
         Cartridge {
-            data: Cartridge::load(&rom_path)
+            data: Vec::new(),
         }
     }
 
-    fn load(rom_path: &str) -> Vec<u8> {
+    pub fn load(&mut self, rom_path: &str) {
         // TODO: Add debug traces
         let mut rom_file = File::open(&rom_path).expect("Unable to open the ROM file");
-        let mut data: Vec<u8> = Vec::new();
-        rom_file.read_to_end(&mut data).expect("Unable to read the ROM file data");
-        data
+        rom_file.read_to_end(&mut self.data).expect("Unable to read the ROM file data");
     }
 }
 
@@ -28,7 +25,8 @@ mod tests {
 
     #[test]
     fn load_rom_file() {
-        let mut cart = Cartridge::new("tests/1kb_random_data.gb");
+        let mut cart = Cartridge::new();
+        cart.load("tests/1kb_random_data.gb");
         assert_eq!(cart.data.len(), 1024);
     }
 }
