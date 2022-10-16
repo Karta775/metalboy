@@ -21,8 +21,12 @@ impl Registers {
         }
     }
 
-    pub fn af(&self) -> u16 {
-        word_from(self.a, self.f)
+    pub fn reset(&mut self) {
+        self.set_bc(0);
+        self.set_de(0);
+        self.set_hl(0);
+        self.pc = 0;
+        self.sp = 0;
     }
 
     pub fn bc(&self) -> u16 {
@@ -35,12 +39,6 @@ impl Registers {
 
     pub fn hl(&self) -> u16 {
         word_from(self.h, self.l)
-    }
-
-    pub fn set_af(&mut self, word: u16) {
-        let (a,f) = bytes_from(word);
-        self.a = a;
-        self.f = f;
     }
 
     pub fn set_bc(&mut self, word: u16) {
@@ -69,16 +67,16 @@ mod tests {
     #[test]
     fn get_register_combo() {
         let mut registers = Registers::new();
-        registers.a = 0xAB;
-        registers.f = 0xCD;
-        assert_eq!(registers.af(), 0xABCD);
+        registers.b = 0xAB;
+        registers.c = 0xCD;
+        assert_eq!(registers.bc(), 0xABCD);
     }
 
     #[test]
     fn set_register_combo() {
         let mut registers = Registers::new();
-        registers.set_af(0xABCD);
-        assert_eq!(registers.a, 0xAB);
-        assert_eq!(registers.f, 0xCD);
+        registers.set_bc(0xABCD);
+        assert_eq!(registers.b, 0xAB);
+        assert_eq!(registers.c, 0xCD);
     }
 }
