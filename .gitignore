@@ -4,3 +4,6 @@
 **/*.gb
 **/*.gbc
 !tests/*
+
+# Ignore the opcodes JSON file
+scripts/opcodes.json
