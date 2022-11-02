@@ -20,12 +20,17 @@ impl Cpu {
     }
 
     pub fn tick(&mut self) {
+        if self.reg.pc % 80 == 0 {
+            println!();
+        }
+        print!("{:02x} ", self.mmu.get(self.reg.pc));
+
         self.reg.pc += 2;
     }
 
     pub fn execute(&mut self) {
-        let mut bytes: usize = 1;
-        let mut advance_pc: bool = true;
+        let mut _bytes: usize = 1;
+        let mut _advance_pc: bool = true;
 
         // self.mmu.get(self.reg.pc);
     }
