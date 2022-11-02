@@ -16,6 +16,7 @@ impl Mmu {
     }
 
     pub fn get(&self, address: u16) -> u8 {
+        #[allow(unreachable_patterns)]
         match address {
             0x0000..=0x3FFF => self.cartridge.data[address as usize], // 16KB ROM bank 00
             0x4000..=0x7FFF => self.cartridge.data[address as usize], // 16KB ROM Bank 01~NN
