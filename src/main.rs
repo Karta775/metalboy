@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate log;
 use metalboy::cpu::Cpu;
 
@@ -8,7 +7,8 @@ fn main() {
 
     // Create CPU
     let mut cpu = Cpu::new();
-    cpu.mmu.cartridge.load("tetris.gb");
+    cpu.mmu.cartridge.load("bootix_dmg.bin");
+    // cpu.mmu.cartridge.load("tetris.gb");
 
     // Emulation loop
     loop {
