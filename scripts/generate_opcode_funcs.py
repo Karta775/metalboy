@@ -7,7 +7,7 @@ OPCODES_FILENAME = "opcodes.json"
 
 
 def create_decode_match(values):
-    return '{} => print_decode({}, "{}", {}, "{}", "{}"),' \
+    return '{} => Some(to_string({}, "{}", {}, "{}", "{}")),' \
         .format(values['addr'], values['addr'], values['mnemonic'], values['length'], values['cycles'], values['group'])
 
 
