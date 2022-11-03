@@ -6,6 +6,8 @@ pub struct Cpu {
     pub reg: Registers,
     pub mmu: Mmu,
     pub opcode: u8,
+    pub advance_pc: u16,
+    pub cycles: u16,
 }
 
 impl Cpu {
@@ -14,6 +16,8 @@ impl Cpu {
             reg: Registers::new(),
             mmu: Mmu::new(),
             opcode: 0x00,
+            advance_pc: 1,
+            cycles: 0,
         }
     }
 
@@ -31,7 +35,8 @@ impl Cpu {
 
         self.opcode = self.mmu.get(self.reg.pc);
         execute(self);
-        self.reg.pc += 2;
+        self.reg.pc += self.advance_pc;
+        self.advance_pc = 1;
         if self.reg.pc > 0x104 {
             panic!();
         }
@@ -54,6 +59,6 @@ mod tests {
         let mut cpu = Cpu::new();
         let initial_state = cpu.reg.pc;
         cpu.tick();
-        assert_eq!(cpu.reg.pc, initial_state + 2);
+        assert_eq!(cpu.reg.pc, initial_state + 1);
     }
 }
