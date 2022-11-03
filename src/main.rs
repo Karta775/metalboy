@@ -8,7 +8,6 @@ fn main() {
     // Create CPU
     let mut cpu = Cpu::new();
     cpu.mmu.cartridge.load("bootix_dmg.bin");
-    // cpu.mmu.cartridge.load("tetris.gb");
 
     // Emulation loop
     loop {
