@@ -12,7 +12,7 @@ fn unknown(cpu: &Cpu) -> String {
 }
 
 // Log the decoded opcode appropriately
-pub fn log_decode(cpu: &mut Cpu) {
+pub fn log_decode(cpu: &Cpu) {
     if let Some(decoded) = decode(cpu) {
         debug!("{}", decoded);
     } else {
@@ -21,7 +21,7 @@ pub fn log_decode(cpu: &mut Cpu) {
 }
 
 // Match the opcode and return a formatted String, else return None
-pub fn decode(cpu: &mut Cpu) -> Option<String> {
+pub fn decode(cpu: &Cpu) -> Option<String> {
     match cpu.opcode {
         0x00 => Some(to_string(0x00, "NOP", 1, "[4]", "control/misc")),
         0x01 => Some(to_string(0x01, "LD", 3, "[12]", "x16/lsm")),
