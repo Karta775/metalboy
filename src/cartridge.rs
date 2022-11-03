@@ -18,15 +18,3 @@ impl Cartridge {
         rom_file.read(&mut self.data).expect("Unable to read the ROM file data");
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::cartridge::Cartridge;
-
-    #[test]
-    fn load_rom_file() {
-        let mut cart = Cartridge::new();
-        cart.load("tests/1kb_random_data.gb");
-        assert_eq!(cart.data.len(), 1024);
-    }
-}
