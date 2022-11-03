@@ -7,14 +7,18 @@ OPCODES_URL = "https://raw.githubusercontent.com/lmmendes/game-boy-opcodes/maste
 OPCODES_FILENAME = "opcodes.json"
 
 
-def create_decode_match(values):
+def get_full_instruction(values):
     instruction = values['mnemonic'] + " "
     if "operand1" in values.keys():
         instruction += values['operand1'] + " "
     if "operand2" in values.keys():
         instruction += values['operand2']
+    return instruction
+
+
+def create_decode_match(values):
     return '{} => Some(to_string({}, "{}", {}, "{}", "{}")),' \
-        .format(values['addr'], values['addr'], instruction, values['length'], values['cycles'], values['group'])
+        .format(values['addr'], values['addr'], get_full_instruction(values), values['length'], values['cycles'], values['group'])
 
 
 def create_execute_match(values):
@@ -31,7 +35,7 @@ def create_execute_func(values):
     op_unimplemented(cpu);
     cpu.advance_pc = {};
     {};
-}} // {} [{}/{}/{}/{}]'''.format(values['addr'][2:], values['length'], cycles, values['mnemonic'],
+}} // {} [{}/{}/{}/{}]'''.format(values['addr'][2:], values['length'], cycles, get_full_instruction(values),
                                  values['flags'][0], values['flags'][1], values['flags'][2], values['flags'][3])
 
 
