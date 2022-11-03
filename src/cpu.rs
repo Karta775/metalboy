@@ -1,6 +1,6 @@
+use crate::execute::execute;
 use super::registers::Registers;
 use super::mmu::Mmu;
-use super::decode::decode;
 
 pub struct Cpu {
     pub reg: Registers,
@@ -30,7 +30,7 @@ impl Cpu {
         // print!("{:02x} ", self.mmu.get(self.reg.pc));
 
         self.opcode = self.mmu.get(self.reg.pc);
-        decode(self);
+        execute(self);
         self.reg.pc += 2;
         if self.reg.pc > 0x104 {
             panic!();
