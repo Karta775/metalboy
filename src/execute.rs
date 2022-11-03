@@ -428,9 +428,11 @@ fn execute_20(cpu: &mut Cpu) {
     // Two possible CPU cycles: [3, 2];
 } // JR NZ r8 [-/-/-/-]
 fn execute_21(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 3;
     cpu.cycles += 3;
+    cpu.reg.h = cpu.mmu.get(cpu.reg.pc + 2);
+    cpu.reg.l = cpu.mmu.get(cpu.reg.pc + 1);
 } // LD HL d16 [-/-/-/-]
 fn execute_22(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -516,9 +518,11 @@ fn execute_31(cpu: &mut Cpu) {
     cpu.reg.sp = word_from(byte2, byte1);
 } // LD SP d16 [-/-/-/-]
 fn execute_32(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    cpu.mmu.set(cpu.reg.hl(), cpu.reg.a);
+    cpu.reg.set_hl(cpu.reg.hl() - 1);
 } // LD (HL-) A [-/-/-/-]
 fn execute_33(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1141,9 +1145,11 @@ fn execute_ae(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // XOR (HL)  [Z/0/0/0]
 fn execute_af(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    cpu.reg.a ^= cpu.reg.a;
+    cpu.reg.f.zero = cpu.reg.a == 0;
 } // XOR A  [Z/0/0/0]
 fn execute_b0(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1498,10 +1504,51 @@ mod tests {
     use crate::execute::*;
 
     #[test]
+    fn execute_21_ok() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x21, 0xBE, 0xEF];
+        execute_21(&mut cpu);
+        assert_eq!(cpu.reg.hl(), 0xEFBE);
+    }
+
+    #[test]
     fn execute_31_ok() {
         let mut cpu = Cpu::new();
-        cpu.mmu.cartridge.data = vec![0x31, 0xBE, 0xEF, 0x00, 0x00];
+        cpu.mmu.cartridge.data = vec![0x31, 0xBE, 0xEF];
         execute_31(&mut cpu);
         assert_eq!(cpu.reg.sp, 0xEFBE);
+    }
+
+    #[test]
+    fn execute_32_ok() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x32];
+        cpu.reg.set_hl(0x9fff);
+        cpu.reg.a = 0xBB;
+        execute_32(&mut cpu);
+        assert_eq!(cpu.mmu.get(0x9fff), 0xBB);
+        assert_eq!(cpu.reg.hl(), 0x9ffe);
+    }
+
+    #[test]
+    fn execute_af_zero() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0xAF];
+        assert_eq!(cpu.reg.a, 0);
+        assert_eq!(cpu.reg.f.zero, false);
+        execute_af(&mut cpu);
+        assert_eq!(cpu.reg.a, 0);
+        assert_eq!(cpu.reg.f.zero, true);
+    }
+
+    #[test]
+    fn execute_af_not_zero() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0xAF];
+        cpu.reg.a = 32;
+        assert_eq!(cpu.reg.f.zero, false);
+        execute_af(&mut cpu);
+        assert_eq!(cpu.reg.a, 0);
+        assert_eq!(cpu.reg.f.zero, true);
     }
 }
