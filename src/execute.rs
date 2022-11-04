@@ -1,10 +1,11 @@
 use super::cpu::Cpu;
 use super::decode::decode;
 use log::{debug, warn};
+use crate::registers::Flags;
 use crate::word_from;
 
 fn op_implemented(cpu: &Cpu) {
-    debug!("I PC: {:04x} {}", cpu.reg.pc, decode(cpu).expect("Unknown opcode"));
+    debug!("I PC: {:04x} {}", cpu.reg.pc, decode(cpu).expect("Unknown opcode"), );
 }
 
 fn op_unimplemented(cpu: &Cpu) {
@@ -262,6 +263,12 @@ pub fn execute(cpu: &mut Cpu) {
     }
 }
 
+fn inc_d8(reg: &mut u8, flags: &mut Flags) {
+    (*reg, flags.carry) = u8::overflowing_add(*reg, 1);
+    flags.zero = *reg == 0;
+    // FIXME: Understand what flags need to be set
+}
+
 fn execute_00(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
@@ -323,9 +330,10 @@ fn execute_0b(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // DEC BC  [-/-/-/-]
 fn execute_0c(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    inc_d8(&mut cpu.reg.c, &mut cpu.reg.f);
 } // INC C  [Z/0/H/-]
 fn execute_0d(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -333,9 +341,10 @@ fn execute_0d(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // DEC C  [Z/1/H/-]
 fn execute_0e(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    cpu.reg.c = cpu.mmu.get(cpu.reg.pc + 1);
 } // LD C d8 [-/-/-/-]
 fn execute_0f(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -348,9 +357,11 @@ fn execute_10(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // STOP 0  [-/-/-/-]
 fn execute_11(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 3;
     cpu.cycles += 3;
+    cpu.reg.d = cpu.mmu.get(cpu.reg.pc + 2);
+    cpu.reg.e = cpu.mmu.get(cpu.reg.pc + 1);
 } // LD DE d16 [-/-/-/-]
 fn execute_12(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -423,9 +434,13 @@ fn execute_1f(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // RRA  [0/0/0/C]
 fn execute_20(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     // Two possible CPU cycles: [3, 2];
+    if !cpu.reg.f.zero {
+        cpu.advance_pc = cpu.mmu.get(cpu.reg.pc + 1) as i16;
+    }
+    // TODO: Read about Game Boy signed integers
 } // JR NZ r8 [-/-/-/-]
 fn execute_21(cpu: &mut Cpu) {
     op_implemented(cpu);
@@ -580,9 +595,10 @@ fn execute_3d(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // DEC A  [Z/1/H/-]
 fn execute_3e(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    cpu.reg.a = cpu.mmu.get(cpu.reg.pc + 1);
 } // LD A d8 [-/-/-/-]
 fn execute_3f(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -890,9 +906,10 @@ fn execute_7b(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // LD A E [-/-/-/-]
 fn execute_7c(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    cpu.reg.a = cpu.reg.h;
 } // LD A H [-/-/-/-]
 fn execute_7d(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1504,6 +1521,48 @@ mod tests {
     use crate::execute::*;
 
     #[test]
+    fn execute_0c_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.c = 0x20;
+        execute_0c(&mut cpu);
+        assert_eq!(cpu.reg.c, 0x21);
+    }
+
+    #[test]
+    fn execute_0e_ok() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x0e, 0xBE];
+        execute_0e(&mut cpu);
+        assert_eq!(cpu.reg.c, 0xBE);
+    }
+
+    #[test]
+    fn execute_11_ok() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x11, 0xBE, 0xEF];
+        execute_11(&mut cpu);
+        assert_eq!(cpu.reg.de(), 0xEFBE);
+    }
+
+    #[test]
+    fn execute_20_jmp() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x20, 0x06];
+        cpu.reg.f.zero = false;
+        execute_20(&mut cpu);
+        assert_eq!(cpu.advance_pc, 6);
+    }
+
+    #[test]
+    fn execute_20_no_jmp() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x20, 0x06];
+        cpu.reg.f.zero = true;
+        execute_20(&mut cpu);
+        assert_eq!(cpu.advance_pc, 2);
+    }
+
+    #[test]
     fn execute_21_ok() {
         let mut cpu = Cpu::new();
         cpu.mmu.cartridge.data = vec![0x21, 0xBE, 0xEF];
@@ -1528,6 +1587,24 @@ mod tests {
         execute_32(&mut cpu);
         assert_eq!(cpu.mmu.get(0x9fff), 0xBB);
         assert_eq!(cpu.reg.hl(), 0x9ffe);
+    }
+
+    #[test]
+    fn execute_3e_ok() {
+        let mut cpu = Cpu::new();
+        cpu.mmu.cartridge.data = vec![0x3E, 0xBE];
+        execute_3e(&mut cpu);
+        assert_eq!(cpu.reg.a, 0xBE);
+    }
+
+    #[test]
+    fn execute_7c_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.h = 5;
+        assert_ne!(cpu.reg.a, cpu.reg.h);
+        execute_7c(&mut cpu);
+        assert_eq!(cpu.reg.a, cpu.reg.h);
+        assert_eq!(cpu.reg.a, 5);
     }
 
     #[test]

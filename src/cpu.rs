@@ -6,7 +6,7 @@ pub struct Cpu {
     pub reg: Registers,
     pub mmu: Mmu,
     pub opcode: u8,
-    pub advance_pc: u16,
+    pub advance_pc: i16,
     pub cycles: u16,
 }
 
@@ -35,7 +35,7 @@ impl Cpu {
 
         self.opcode = self.mmu.get(self.reg.pc);
         execute(self);
-        self.reg.pc += self.advance_pc;
+        self.reg.pc = (self.reg.pc as i16 + self.advance_pc) as u16;
         self.advance_pc = 1;
         if self.reg.pc > 0x104 {
             panic!();
