@@ -17,8 +17,8 @@ def get_full_instruction(values):
 
 
 def create_decode_match(values):
-    return '{} => Some(to_string({}, "{}", {}, "{}", "{}")),' \
-        .format(values['addr'], values['addr'], get_full_instruction(values), values['length'], values['cycles'], values['group'])
+    return '{} => Some(to_string({}, "{}", &get_operands(cpu, {}), "{}")),' \
+        .format(values['addr'], values['addr'], get_full_instruction(values), values['length'], values['group'])
 
 
 def create_execute_match(values):
@@ -55,7 +55,11 @@ def main():
                 values['cycles'][i] = int(values['cycles'][i] / 4)
 
         if args.decode_matches:  # Print out every decode match (unprefixed)
+            print("// Unprefixed")
             for opcode, values in unprefixed.items():
+                print(create_decode_match(values))
+            print("// CB prefixed")
+            for opcode, values in cbprefixed.items():
                 print(create_decode_match(values))
         elif args.execute_matches:  # Print out every execute match (unprefixed)
             for opcode, values in unprefixed.items():
