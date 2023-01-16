@@ -17,8 +17,8 @@ def get_full_instruction(values):
 
 
 def create_decode_match(values):
-    return '{} => Some(to_string({}, "{}", &get_operands(cpu, {}), "{}")),' \
-        .format(values['addr'], values['addr'], get_full_instruction(values), values['length'], values['group'])
+    return '{} => Some(to_string({}, "{}", &get_operands(cpu, {}))),' \
+        .format(values['addr'], values['addr'], get_full_instruction(values), values['length'])
 
 
 def create_execute_match(values):

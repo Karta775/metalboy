@@ -1,3 +1,4 @@
+use std::process;
 use crate::execute::execute;
 use super::registers::Registers;
 use super::mmu::Mmu;
@@ -24,21 +25,19 @@ impl Cpu {
     pub fn reset(&mut self) {
         self.reg.reset();
         self.mmu.reset();
+        self.opcode = 0x00;
+        self.advance_pc = 1;
+        self.cycles = 0;
     }
 
     pub fn tick(&mut self) {
-        // Debugging
-        // if self.reg.pc % 80 == 0 {
-        //     println!();
-        // }
-        // print!("{:02x} ", self.mmu.get(self.reg.pc));
-
         self.opcode = self.mmu.get(self.reg.pc);
         execute(self);
         self.reg.pc = (self.reg.pc as i16 + self.advance_pc) as u16;
         self.advance_pc = 1;
         if self.reg.pc > 0x104 {
-            panic!();
+            println!("End of bootrom emulation");
+            process::exit(0);
         }
     }
 

@@ -2,14 +2,21 @@ use super::cpu::Cpu;
 use super::decode::decode;
 use log::{debug, warn};
 use crate::registers::Flags;
-use crate::word_from;
+use crate::{bytes_from, word_from};
 
+// TODO: Flag representation
 fn op_implemented(cpu: &Cpu) {
-    debug!("I PC: {:04x} {}", cpu.reg.pc, decode(cpu).expect("Unknown opcode"), );
+    debug!("I PC: {:04x} {} [A:{:02X} F:{:02X}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
+        cpu.reg.pc, decode(cpu).expect("Unknown opcode"),
+        cpu.reg.a, cpu.reg.f.as_u8(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
+    );
 }
 
 fn op_unimplemented(cpu: &Cpu) {
-    warn!("U PC: {:04x} {}", cpu.reg.pc, decode(cpu).expect("Unknown opcode"));
+    warn!("U PC: {:04x} {} [A:{:02X} F:{:02X}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
+        cpu.reg.pc, decode(cpu).expect(&format!("Unknown opcode : {:02X}", cpu.opcode)),
+        cpu.reg.a, cpu.reg.f.as_u8(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
+    );
 }
 
 pub fn execute(cpu: &mut Cpu) {
@@ -265,8 +272,23 @@ pub fn execute(cpu: &mut Cpu) {
 
 fn inc_d8(reg: &mut u8, flags: &mut Flags) {
     (*reg, flags.carry) = u8::overflowing_add(*reg, 1);
-    flags.zero = *reg == 0;
-    // FIXME: Understand what flags need to be set
+}
+
+fn call_a16(cpu: &mut Cpu) {
+    // Store PC on stack
+    // TODO: Create a stack_push function
+    let (left, right) = bytes_from(cpu.reg.pc + 3);
+    cpu.mmu.set(cpu.reg.sp - 1, left);
+    cpu.mmu.set(cpu.reg.sp - 2, right);
+    cpu.reg.sp -= 2;
+    // Set PC to address
+    let left = cpu.mmu.get(cpu.reg.pc + 1);
+    let right = cpu.mmu.get(cpu.reg.pc + 2);
+    cpu.reg.pc = word_from(right, left);
+}
+
+fn ld_d8(reg: &mut u8, byte: u8) {
+    *reg = byte;
 }
 
 fn execute_00(cpu: &mut Cpu) {
@@ -344,7 +366,8 @@ fn execute_0e(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
-    cpu.reg.c = cpu.mmu.get(cpu.reg.pc + 1);
+    let byte = cpu.mmu.get(cpu.reg.pc + 1);
+    ld_d8(&mut cpu.reg.c, byte);
 } // LD C d8 [-/-/-/-]
 fn execute_0f(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -369,9 +392,10 @@ fn execute_12(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // LD (DE) A [-/-/-/-]
 fn execute_13(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    cpu.reg.set_de(word_from(cpu.reg.d, cpu.reg.e) + 1);
 } // INC DE  [-/-/-/-]
 fn execute_14(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -404,9 +428,10 @@ fn execute_19(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // ADD HL DE [-/0/H/C]
 fn execute_1a(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    cpu.reg.a = cpu.mmu.get(cpu.reg.de());
 } // LD A (DE) [-/-/-/-]
 fn execute_1b(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -641,9 +666,10 @@ fn execute_46(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // LD B (HL) [-/-/-/-]
 fn execute_47(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    ld_d8(&mut cpu.reg.b, cpu.reg.a);
 } // LD B A [-/-/-/-]
 fn execute_48(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1313,10 +1339,12 @@ fn execute_cc(cpu: &mut Cpu) {
     cpu.advance_pc = 3;
     // Two possible CPU cycles: [6, 3];
 } // CALL Z a16 [-/-/-/-]
-fn execute_cd(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
-    cpu.advance_pc = 3;
+fn execute_cd(cpu: &mut Cpu) { // TODO: Missing test
+    op_implemented(cpu);
+    // cpu.advance_pc = 3;
+    cpu.advance_pc = 0;
     cpu.cycles += 6;
+    call_a16(cpu);
 } // CALL a16  [-/-/-/-]
 fn execute_ce(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1404,9 +1432,11 @@ fn execute_e1(cpu: &mut Cpu) {
     cpu.cycles += 3;
 } // POP HL  [-/-/-/-]
 fn execute_e2(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    let address = word_from(0xFF, cpu.reg.c);
+    cpu.mmu.set(address, cpu.reg.a);
 } // LD (C) A [-/-/-/-]
 fn execute_e5(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1595,6 +1625,14 @@ mod tests {
         cpu.mmu.cartridge.data = vec![0x3E, 0xBE];
         execute_3e(&mut cpu);
         assert_eq!(cpu.reg.a, 0xBE);
+    }
+
+    #[test]
+    fn execute_47_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.a = 20;
+        execute_47(&mut cpu);
+        assert_eq!(cpu.reg.b, 20);
     }
 
     #[test]
