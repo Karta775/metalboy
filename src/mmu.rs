@@ -1,7 +1,11 @@
+use std::fs::File;
+use std::io::Read;
 use log::error;
 use crate::cartridge::Cartridge;
 
 pub struct Mmu {
+    pub bootrom: Vec<u8>,
+    pub bootrom_mapped: bool,
     pub cartridge: Cartridge,
     pub vram: Vec<u8>,
     pub hram: Vec<u8>,
@@ -10,10 +14,17 @@ pub struct Mmu {
 impl Mmu {
     pub fn new() -> Self {
         Self {
+            bootrom: vec![0; 256],
+            bootrom_mapped: true,
             cartridge: Cartridge::new(),
             vram: vec![0; 0x2000],
             hram: vec![0; 128],
         }
+    }
+
+    pub fn load_bootrom(&mut self, rom_path: &str) {
+        let mut rom_file = File::open(&rom_path).expect("Unable to open the ROM file");
+        rom_file.read(&mut self.bootrom).expect("Unable to read the ROM file data");
     }
 
     pub fn reset(&mut self) {
@@ -22,6 +33,12 @@ impl Mmu {
 
     pub fn get(&self, address: u16) -> u8 {
         #[allow(unreachable_patterns)]
+        if self.bootrom_mapped {
+            match address {
+                0x0000..=0x0100 => return self.bootrom[address as usize],
+                _ => ()
+            }
+        }
         match address {
             0x0000..=0x3FFF => self.cartridge.data[address as usize], // 16KB ROM bank 00
             0x4000..=0x7FFF => self.cartridge.data[address as usize], // 16KB ROM Bank 01~NN

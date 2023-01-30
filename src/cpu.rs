@@ -1,4 +1,7 @@
+use std::fs::File;
+use std::io::Read;
 use std::process;
+use log::trace;
 use crate::execute::execute;
 use super::registers::Registers;
 use super::mmu::Mmu;
@@ -9,6 +12,7 @@ pub struct Cpu {
     pub opcode: u8,
     pub advance_pc: i16,
     pub cycles: u16,
+    pub cb_prefix: bool,
 }
 
 impl Cpu {
@@ -19,6 +23,7 @@ impl Cpu {
             opcode: 0x00,
             advance_pc: 1,
             cycles: 0,
+            cb_prefix: false,
         }
     }
 
@@ -35,17 +40,20 @@ impl Cpu {
         execute(self);
         self.reg.pc = (self.reg.pc as i16 + self.advance_pc) as u16;
         self.advance_pc = 1;
-        if self.reg.pc > 0x104 {
-            println!("End of bootrom emulation");
-            process::exit(0);
+        if self.mmu.bootrom_mapped && self.reg.pc >= 0x100 {
+            trace!("End of bootrom emulation, unmapping bootrom");
+            self.mmu.bootrom_mapped = false;
         }
     }
 
     pub fn execute(&mut self) {
         let mut _bytes: usize = 1;
         let mut _advance_pc: bool = true;
-
         // self.mmu.get(self.reg.pc);
+    }
+
+    pub fn get_op(&self, offset: u16) -> u8 {
+        self.mmu.get(self.reg.pc + offset)
     }
 }
 
