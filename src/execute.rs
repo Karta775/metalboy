@@ -694,9 +694,11 @@ fn execute_17(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // RLA  [0/0/0/C]
 fn execute_18(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 3;
+    let s8 = cpu.get_op(1) as i8;
+    cpu.advance_pc += s8 as i16;
 } // JR r8  [-/-/-/-]
 fn execute_19(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -710,9 +712,10 @@ fn execute_1a(cpu: &mut Cpu) {
     cpu.reg.a = cpu.mmu.get(cpu.reg.de());
 } // LD A (DE) [-/-/-/-]
 fn execute_1b(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    cpu.reg.set_de(cpu.reg.de() - 1);
 } // DEC DE  [-/-/-/-]
 fn execute_1c(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1620,9 +1623,12 @@ fn execute_cb(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // PREFIX CB  [-/-/-/-]
 fn execute_cc(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 3;
-    // Two possible CPU cycles: [6, 3];
+    // FIXME: Two possible CPU cycles: [6, 3];
+    if cpu.reg.f.zero {
+        call_a16(cpu)
+    }
 } // CALL Z a16 [-/-/-/-]
 fn execute_cd(cpu: &mut Cpu) { // TODO: Missing test
     op_implemented(cpu);
@@ -1910,9 +1916,14 @@ fn cb_execute_0f(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // RRC A  [Z/0/0/C]
 fn cb_execute_10(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    // FIXME: Implement RL for any register
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    let new_cy = (cpu.reg.b & 0b10000000) >> 7;
+    cpu.reg.b <<= 1;
+    cpu.reg.b |= cpu.reg.f.carry as u8; // TODO: Is CY carry?
+    cpu.reg.f.carry = new_cy != 0;
 } // RL B  [Z/0/0/C]
 fn cb_execute_11(cpu: &mut Cpu) {
     op_unimplemented(cpu);
