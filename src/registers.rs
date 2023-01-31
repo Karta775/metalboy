@@ -64,7 +64,7 @@ impl Registers {
             d: 0, e: 0,
             h: 0, l: 0,
             pc: 0,
-            sp: 0,
+            sp: u16::MAX,
         }
     }
 
@@ -73,7 +73,7 @@ impl Registers {
         self.set_de(0);
         self.set_hl(0);
         self.pc = 0;
-        self.sp = 0;
+        self.sp = u16::MAX;
     }
 
     pub fn af(&self) -> u16 {

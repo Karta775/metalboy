@@ -31,8 +31,8 @@ impl Mmu {
         // TODO: Reset memory to defaults
     }
 
+    #[allow(unreachable_patterns)]
     pub fn get(&self, address: u16) -> u8 {
-        #[allow(unreachable_patterns)]
         if self.bootrom_mapped {
             match address {
                 0x0000..=0x0100 => return self.bootrom[address as usize],

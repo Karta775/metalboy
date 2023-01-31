@@ -19,6 +19,7 @@ fn op_unimplemented(cpu: &Cpu) {
     );
 }
 
+#[allow(unreachable_patterns)]
 pub fn execute(cpu: &mut Cpu) {
     if cpu.opcode == 0xCB {
         cpu.cb_prefix = true;
@@ -280,7 +281,7 @@ pub fn execute(cpu: &mut Cpu) {
             0xfd => cb_execute_fd(cpu),
             0xfe => cb_execute_fe(cpu),
             0xff => cb_execute_ff(cpu),
-            // _ => op_unimplemented(cpu)
+            _ => op_unimplemented(cpu)
         }
     } else {
         cpu.cb_prefix = false;
@@ -539,16 +540,26 @@ fn inc_d8(reg: &mut u8, flags: &mut Flags) {
     (*reg, flags.carry) = u8::overflowing_add(*reg, 1);
 }
 
-fn call_a16(cpu: &mut Cpu) {
-    // Store PC on stack
-    // TODO: Create a stack_push function
-    let (left, right) = bytes_from(cpu.reg.pc + 3);
+fn push_word(cpu: &mut Cpu, word: u16) {
+    let (left, right) = bytes_from(word);
     cpu.mmu.set(cpu.reg.sp - 1, left);
     cpu.mmu.set(cpu.reg.sp - 2, right);
     cpu.reg.sp -= 2;
+}
+
+fn pop_word(cpu: &mut Cpu) -> u16 {
+    let left = cpu.mmu.get(cpu.reg.sp + 1);
+    let right = cpu.mmu.get(cpu.reg.sp);
+    cpu.reg.sp += 2;
+    word_from(left, right)
+}
+
+fn call_a16(cpu: &mut Cpu) {
+    // Store PC on stack
+    push_word(cpu, cpu.reg.pc + 3);
     // Set PC to address
-    let left = cpu.mmu.get(cpu.reg.pc + 1);
-    let right = cpu.mmu.get(cpu.reg.pc + 2);
+    let left = cpu.get_op(1);
+    let right = cpu.get_op(2);
     cpu.reg.pc = word_from(right, left);
 }
 
@@ -1550,9 +1561,11 @@ fn execute_c0(cpu: &mut Cpu) {
     // Two possible CPU cycles: [5, 2];
 } // RET NZ  [-/-/-/-]
 fn execute_c1(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 3;
+    let word = pop_word(cpu);
+    cpu.reg.set_bc(word);
 } // POP BC  [-/-/-/-]
 fn execute_c2(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1570,9 +1583,10 @@ fn execute_c4(cpu: &mut Cpu) {
     // Two possible CPU cycles: [6, 3];
 } // CALL NZ a16 [-/-/-/-]
 fn execute_c5(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 4;
+    push_word(cpu, cpu.reg.bc());
 } // PUSH BC  [-/-/-/-]
 fn execute_c6(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1590,9 +1604,10 @@ fn execute_c8(cpu: &mut Cpu) {
     // Two possible CPU cycles: [5, 2];
 } // RET Z  [-/-/-/-]
 fn execute_c9(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
-    cpu.advance_pc = 1;
+    op_implemented(cpu);
+    cpu.advance_pc = 0;
     cpu.cycles += 4;
+    cpu.reg.pc = pop_word(cpu);
 } // RET  [-/-/-/-]
 fn execute_ca(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -3104,6 +3119,20 @@ mod tests {
     use crate::execute::*;
 
     #[test]
+    fn push_pop_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.reset();
+        cpu.reg.set_bc(0xABCD);
+        let word = cpu.reg.bc();
+        push_word(&mut cpu, word);
+        cpu.reg.set_bc(0xBEEF);
+        assert_eq!(cpu.reg.bc(), 0xBEEF);
+        let word = pop_word(&mut cpu);
+        cpu.reg.set_bc(word);
+        assert_eq!(cpu.reg.bc(), 0xABCD);
+    }
+
+    #[test]
     fn execute_0c_ok() {
         let mut cpu = Cpu::new();
         cpu.reg.c = 0x20;
@@ -3114,6 +3143,7 @@ mod tests {
     #[test]
     fn execute_0e_ok() {
         let mut cpu = Cpu::new();
+        cpu.mmu.bootrom_mapped = false;
         cpu.mmu.cartridge.data = vec![0x0e, 0xBE];
         execute_0e(&mut cpu);
         assert_eq!(cpu.reg.c, 0xBE);
@@ -3122,6 +3152,7 @@ mod tests {
     #[test]
     fn execute_11_ok() {
         let mut cpu = Cpu::new();
+        cpu.mmu.bootrom_mapped = false;
         cpu.mmu.cartridge.data = vec![0x11, 0xBE, 0xEF];
         execute_11(&mut cpu);
         assert_eq!(cpu.reg.de(), 0xEFBE);
@@ -3130,10 +3161,11 @@ mod tests {
     #[test]
     fn execute_20_jmp() {
         let mut cpu = Cpu::new();
+        cpu.mmu.bootrom_mapped = false;
         cpu.mmu.cartridge.data = vec![0x20, 0x06];
         cpu.reg.f.zero = false;
         execute_20(&mut cpu);
-        assert_eq!(cpu.advance_pc, 6);
+        assert_eq!(cpu.advance_pc, 8);
     }
 
     #[test]
@@ -3148,6 +3180,7 @@ mod tests {
     #[test]
     fn execute_21_ok() {
         let mut cpu = Cpu::new();
+        cpu.mmu.bootrom_mapped = false;
         cpu.mmu.cartridge.data = vec![0x21, 0xBE, 0xEF];
         execute_21(&mut cpu);
         assert_eq!(cpu.reg.hl(), 0xEFBE);
@@ -3156,6 +3189,7 @@ mod tests {
     #[test]
     fn execute_31_ok() {
         let mut cpu = Cpu::new();
+        cpu.mmu.bootrom_mapped = false;
         cpu.mmu.cartridge.data = vec![0x31, 0xBE, 0xEF];
         execute_31(&mut cpu);
         assert_eq!(cpu.reg.sp, 0xEFBE);
@@ -3175,6 +3209,7 @@ mod tests {
     #[test]
     fn execute_3e_ok() {
         let mut cpu = Cpu::new();
+        cpu.mmu.bootrom_mapped = false;
         cpu.mmu.cartridge.data = vec![0x3E, 0xBE];
         execute_3e(&mut cpu);
         assert_eq!(cpu.reg.a, 0xBE);
