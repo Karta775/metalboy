@@ -7,6 +7,10 @@ pub mod cartridge;
 pub mod system;
 pub mod decode;
 pub mod execute;
+pub mod flags;
+pub mod graphics;
+
+pub const LOGGING_ENABLED: bool = true;
 
 fn word_from(left: u8, right: u8) -> u16 {
     ((left as u16) << 8) | right as u16

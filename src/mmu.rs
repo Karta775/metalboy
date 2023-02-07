@@ -4,21 +4,25 @@ use log::error;
 use crate::cartridge::Cartridge;
 
 pub struct Mmu {
-    pub bootrom: Vec<u8>,
+    pub bootrom: [u8; 256],
     pub bootrom_mapped: bool,
     pub cartridge: Cartridge,
-    pub vram: Vec<u8>,
-    pub hram: Vec<u8>,
+    pub vram: [u8; 0x2000],
+    pub io: [u8; 0x80],
+    pub hram: [u8; 128],
+    pub ie: u8,
 }
 
 impl Mmu {
     pub fn new() -> Self {
         Self {
-            bootrom: vec![0; 256],
+            bootrom: [0; 256],
             bootrom_mapped: true,
             cartridge: Cartridge::new(),
-            vram: vec![0; 0x2000],
-            hram: vec![0; 128],
+            vram: [0; 0x2000],
+            io: [0; 0x80],
+            hram: [0; 128],
+            ie: 0,
         }
     }
 
@@ -49,9 +53,16 @@ impl Mmu {
             0xE000..=0xFDFF => {error!("Reading non-existent memory: ({:04x}) ECHO RAM", address);0}, // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => {error!("Reading non-existent memory: ({:04x}) OAM", address);0}, // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => {error!("Reading non-existent memory: ({:04x}) UNUSABLE", address);0}, // Not usable
-            0xFF00..=0xFF7F => {error!("Reading non-existent memory: ({:04x}) I/O REG", address);0}, // I/O Registers
+            0xFF00..=0xFF7F => {
+                match address {
+                    // TODO: Fully populate this area
+                    0xFF40..=0xFF4B => { error!("Reading non-existent memory: ({:04x}) LCD CTRL", address); 0 },
+                    _ => { error!("Reading non-existent memory: ({:04x}) I/O REG", address); 0 }
+                };
+                self.io[address as usize - 0xFF00]
+            }, // I/O Registers
             0xFF80..=0xFFFE => self.hram[address as usize - 0xFF80], // High RAM (HRAM)
-                     0xFFFF => {error!("Reading non-existent memory: ({:04x}) INTERRUPT", address);0}, // Interrupts Enable Register (IE)
+                     0xFFFF => self.ie, // Interrupts Enable Register (IE)
             _ => 0 // Clion requires this catch-all even though the match is exhaustive :(
         }
     }
@@ -68,10 +79,23 @@ impl Mmu {
             0xE000..=0xFDFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ECHO RAM", byte, address), // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => error!("Writing to non-existent memory: {:02x} -> ({:04x}) OAM", byte, address), // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
-            0xFF00..=0xFF7F => error!("Writing to non-existent memory: {:02x} -> ({:04x}) I/O REG", byte, address), // I/O Registers
+            0xFF00..=0xFF7F => {
+                match address {
+                    // TODO: Fully populate this area
+                    0xFF40..=0xFF4B => error!("Writing to non-existent memory: {:02x} -> ({:04x}) LCD CTRL", byte, address),
+                    _ => error!("Writing to non-existent memory: {:02x} -> ({:04x}) I/O REG", byte, address),
+                };
+                self.io[address as usize - 0xFF00] = byte;
+            } // I/O Registers
             0xFF80..=0xFFFE => self.hram[address as usize - 0xFF80] = byte, // High RAM (HRAM)
-                     0xFFFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) INTERRUPT", byte, address), // Interrupts Enable Register (IE)
+                     0xFFFF => self.ie = byte, // Interrupts Enable Register (IE)
             _ => {} // Clion requires this catch-all even though the match is exhaustive :(
         }
+    }
+
+    pub fn request_interrupt(&mut self, id: u8) {
+        let mut interrupt_flag = self.get(0xFF0F);
+        interrupt_flag |= id;
+        self.set(0xFF0F, interrupt_flag);
     }
 }

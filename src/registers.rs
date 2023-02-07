@@ -1,45 +1,5 @@
 use crate::{word_from, bytes_from};
-
-pub struct Flags {
-    pub zero: bool,
-    pub sub: bool,
-    pub half_carry: bool,
-    pub carry: bool,
-}
-
-impl Flags {
-    pub fn to_string(&self) -> String {
-        let mut result = String::new();
-        result += if self.zero { "z" } else { " " };
-        result += if self.sub { "n" } else { " " };
-        result += if self.half_carry { "h" } else { " " };
-        result += if self.carry { "c" } else { " " };
-        result
-    }
-
-    pub fn as_u8(&self) -> u8 {
-        let mut f = 0b0000000;
-        f += (self.zero as u8)       << 7;
-        f += (self.sub as u8)        << 6;
-        f += (self.half_carry as u8) << 5;
-        f += (self.carry as u8)      << 4;
-        return f;
-    }
-
-    pub fn set_from_u8(&mut self, f: u8) {
-        self.zero =       ((f >> 7) & 1) == 1;
-        self.sub =        ((f >> 6) & 1) == 1;
-        self.half_carry = ((f >> 5) & 1) == 1;
-        self.carry =      ((f >> 4) & 1) == 1;
-    }
-
-    pub fn set_from_bool(&mut self, zero: bool, sub: bool, half_carry: bool, carry: bool) {
-        self.zero = zero;
-        self.sub = sub;
-        self.half_carry = half_carry;
-        self.carry = carry;
-    }
-}
+use crate::flags::Flags;
 
 pub struct Registers {
     pub a: u8, pub f: Flags,
@@ -64,7 +24,7 @@ impl Registers {
             d: 0, e: 0,
             h: 0, l: 0,
             pc: 0,
-            sp: u16::MAX,
+            sp: 0xFFFE,
         }
     }
 
@@ -120,6 +80,22 @@ impl Registers {
 #[cfg(test)]
 mod tests {
     use crate::registers::Registers;
+
+    #[test]
+    fn compute_half_carry_add_ok() {
+        let mut registers = Registers::new();
+        assert!(!registers.f.half_carry);
+        registers.f.compute_half_carry_add(0b00001010, 0b00001100);
+        assert!(registers.f.half_carry);
+    }
+
+    #[test]
+    fn compute_half_carry_add_no_carry() {
+        let mut registers = Registers::new();
+        assert!(!registers.f.half_carry);
+        registers.f.compute_half_carry_add(0b00000101, 0b00000100);
+        assert!(!registers.f.half_carry);
+    }
 
     #[test]
     fn flags_as_u8_ok() {

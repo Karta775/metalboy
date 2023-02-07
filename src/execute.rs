@@ -1,22 +1,25 @@
 use super::cpu::Cpu;
 use super::decode::decode;
 use log::{debug, warn};
-use crate::registers::Flags;
-use crate::{bytes_from, word_from};
+use crate::flags::Flags;
+use crate::{word_from, LOGGING_ENABLED};
 
-// TODO: Flag representation
 fn op_implemented(cpu: &Cpu) {
-    debug!("I PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
-        cpu.reg.pc, decode(cpu).expect("Unknown opcode"),
-        cpu.reg.a, cpu.reg.f.to_string(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
-    );
+    if LOGGING_ENABLED {
+        debug!("I PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
+            cpu.reg.pc, decode(cpu).expect("Unknown opcode"),
+            cpu.reg.a, cpu.reg.f.to_string(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
+        );
+    }
 }
 
 fn op_unimplemented(cpu: &Cpu) {
-    warn!("U PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
-        cpu.reg.pc, decode(cpu).expect(&format!("Unknown opcode : {:02X}", cpu.opcode)),
-        cpu.reg.a, cpu.reg.f.to_string(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
-    );
+    if LOGGING_ENABLED {
+        warn!("U PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
+            cpu.reg.pc, decode(cpu).expect(&format!("Unknown opcode : {:02X}", cpu.opcode)),
+            cpu.reg.a, cpu.reg.f.to_string(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
+        );
+    }
 }
 
 #[allow(unreachable_patterns)]
@@ -536,15 +539,31 @@ pub fn execute(cpu: &mut Cpu) {
     }
 }
 
+// TODO: Consider renaming these (i.e. d8 might mean direct)
 fn inc_d8(reg: &mut u8, flags: &mut Flags) {
     (*reg, flags.carry) = u8::overflowing_add(*reg, 1);
+    flags.sub = false;
+    flags.zero = *reg == 0;
 }
 
-fn push_word(cpu: &mut Cpu, word: u16) {
-    let (left, right) = bytes_from(word);
-    cpu.mmu.set(cpu.reg.sp - 1, left);
-    cpu.mmu.set(cpu.reg.sp - 2, right);
-    cpu.reg.sp -= 2;
+fn dec_d8(reg: &mut u8, flags: &mut Flags) {
+    (*reg, flags.carry) = u8::overflowing_sub(*reg, 1);
+    flags.sub = true;
+    flags.zero = *reg == 0;
+}
+
+fn cp_d8(cpu: &mut Cpu, byte: u8) {
+    let (result, carry) = cpu.reg.a.overflowing_sub(byte);
+    cpu.reg.f.zero = result == 0;
+    cpu.reg.f.sub = true;
+    cpu.reg.f.carry = carry;
+    cpu.reg.f.compute_half_carry_sub(cpu.reg.a, byte);
+}
+
+fn swap_u8(byte: u8) -> u8 {
+    let left = byte >> 4;
+    let right = (byte & 0xf) << 4;
+    return right | left;
 }
 
 fn pop_word(cpu: &mut Cpu) -> u16 {
@@ -556,7 +575,7 @@ fn pop_word(cpu: &mut Cpu) -> u16 {
 
 fn call_a16(cpu: &mut Cpu) {
     // Store PC on stack
-    push_word(cpu, cpu.reg.pc + 3);
+    cpu.push_word(cpu.reg.pc + 3);
     // Set PC to address
     let left = cpu.get_op(1);
     let right = cpu.get_op(2);
@@ -567,15 +586,28 @@ fn ld_d8(reg: &mut u8, byte: u8) {
     *reg = byte;
 }
 
+fn ld_mem_d8(cpu: &mut Cpu, address: u16, byte: u8) {
+    cpu.mmu.set(address, byte);
+}
+
+fn rl_d8(reg: &mut u8, flags: &mut Flags) {
+    let new_cy = (*reg & 0b10000000) >> 7;
+    *reg <<= 1;
+    *reg |= flags.carry as u8;
+    flags.carry = new_cy != 0;
+}
+
 fn execute_00(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
 } // NOP  [-/-/-/-]
 fn execute_01(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 3;
     cpu.cycles += 3;
+    let (left, right) = (cpu.get_op(2), cpu.get_op(1));
+    cpu.reg.set_bc(word_from(left, right));
 } // LD BC d16 [-/-/-/-]
 fn execute_02(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -588,19 +620,23 @@ fn execute_03(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // INC BC  [-/-/-/-]
 fn execute_04(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    inc_d8(&mut cpu.reg.b, &mut cpu.reg.f);
 } // INC B  [Z/0/H/-]
 fn execute_05(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    dec_d8(&mut cpu.reg.b, &mut cpu.reg.f);
 } // DEC B  [Z/1/H/-]
 fn execute_06(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    let byte = cpu.get_op(1);
+    ld_d8(&mut cpu.reg.b, byte);
 } // LD B d8 [-/-/-/-]
 fn execute_07(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -634,9 +670,10 @@ fn execute_0c(cpu: &mut Cpu) {
     inc_d8(&mut cpu.reg.c, &mut cpu.reg.f);
 } // INC C  [Z/0/H/-]
 fn execute_0d(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    dec_d8(&mut cpu.reg.c, &mut cpu.reg.f);
 } // DEC C  [Z/1/H/-]
 fn execute_0e(cpu: &mut Cpu) {
     op_implemented(cpu);
@@ -689,9 +726,10 @@ fn execute_16(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // LD D d8 [-/-/-/-]
 fn execute_17(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    rl_d8(&mut cpu.reg.a, &mut cpu.reg.f);
 } // RLA  [0/0/0/C]
 fn execute_18(cpu: &mut Cpu) {
     op_implemented(cpu);
@@ -740,10 +778,11 @@ fn execute_1f(cpu: &mut Cpu) {
 fn execute_20(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    // FIXME: Two possible CPU cycles: [3, 2];
+    cpu.cycles = 2;
     if !cpu.reg.f.zero {
         let s8 = cpu.get_op(1) as i8;
         cpu.advance_pc += s8 as i16;
+        cpu.cycles = 3;
     }
 } // JR NZ r8 [-/-/-/-]
 fn execute_21(cpu: &mut Cpu) {
@@ -754,9 +793,13 @@ fn execute_21(cpu: &mut Cpu) {
     cpu.reg.l = cpu.get_op(1);
 } // LD HL d16 [-/-/-/-]
 fn execute_22(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    // FIXME: Might require flags being set
+    // FIXME: Increment before or after?
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    ld_mem_d8(cpu, cpu.reg.hl(), cpu.reg.a);
+    cpu.reg.set_hl(cpu.reg.hl() + 1);
 } // LD (HL+) A [-/-/-/-]
 fn execute_23(cpu: &mut Cpu) {
     op_implemented(cpu);
@@ -785,9 +828,14 @@ fn execute_27(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // DAA  [Z/-/0/C]
 fn execute_28(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
-    // Two possible CPU cycles: [3, 2];
+    cpu.cycles = 2;
+    if cpu.reg.f.zero {
+        let s8 = cpu.get_op(1) as i8;
+        cpu.advance_pc += s8 as i16;
+        cpu.cycles = 3;
+    }
 } // JR Z r8 [-/-/-/-]
 fn execute_29(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1187,14 +1235,16 @@ fn execute_76(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // HALT  [-/-/-/-]
 fn execute_77(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
+    ld_mem_d8(cpu, cpu.reg.hl(), cpu.reg.a);
 } // LD (HL) A [-/-/-/-]
 fn execute_78(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    ld_d8(&mut cpu.reg.a, cpu.reg.b);
 } // LD A B [-/-/-/-]
 fn execute_79(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1207,9 +1257,10 @@ fn execute_7a(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // LD A D [-/-/-/-]
 fn execute_7b(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    ld_d8(&mut cpu.reg.a, cpu.reg.e);
 } // LD A E [-/-/-/-]
 fn execute_7c(cpu: &mut Cpu) {
     op_implemented(cpu);
@@ -1576,9 +1627,11 @@ fn execute_c2(cpu: &mut Cpu) {
     // Two possible CPU cycles: [4, 3];
 } // JP NZ a16 [-/-/-/-]
 fn execute_c3(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 3;
     cpu.cycles += 4;
+    let (left, right) = (cpu.get_op(1), cpu.get_op(2));
+    cpu.reg.pc = word_from(right, left);
 } // JP a16  [-/-/-/-]
 fn execute_c4(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1589,7 +1642,7 @@ fn execute_c5(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 4;
-    push_word(cpu, cpu.reg.bc());
+    cpu.push_word(cpu.reg.bc());
 } // PUSH BC  [-/-/-/-]
 fn execute_c6(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1625,9 +1678,11 @@ fn execute_cb(cpu: &mut Cpu) {
 fn execute_cc(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 3;
+    cpu.cycles = 3;
     // FIXME: Two possible CPU cycles: [6, 3];
     if cpu.reg.f.zero {
-        call_a16(cpu)
+        call_a16(cpu);
+        cpu.cycles = 6;
     }
 } // CALL Z a16 [-/-/-/-]
 fn execute_cd(cpu: &mut Cpu) { // TODO: Missing test
@@ -1713,9 +1768,11 @@ fn execute_df(cpu: &mut Cpu) {
     cpu.cycles += 4;
 } // RST 18H  [-/-/-/-]
 fn execute_e0(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 3;
+    let address = word_from(0xFF, cpu.get_op(1));
+    ld_mem_d8(cpu, address, cpu.reg.a);
 } // LDH (a8) A [-/-/-/-]
 fn execute_e1(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1770,9 +1827,11 @@ fn execute_ef(cpu: &mut Cpu) {
     cpu.cycles += 4;
 } // RST 28H  [-/-/-/-]
 fn execute_f0(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 3;
+    let address = word_from(0xFF, cpu.get_op(1));
+    cpu.reg.a = cpu.mmu.get(address);
 } // LDH A (a8) [-/-/-/-]
 fn execute_f1(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1825,9 +1884,11 @@ fn execute_fb(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // EI  [-/-/-/-]
 fn execute_fe(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    let byte = cpu.get_op(1);
+    cp_d8(cpu, byte);
 } // CP d8  [Z/1/H/C]
 fn execute_ff(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1916,14 +1977,10 @@ fn cb_execute_0f(cpu: &mut Cpu) {
     cpu.cycles += 2;
 } // RRC A  [Z/0/0/C]
 fn cb_execute_10(cpu: &mut Cpu) {
-    // FIXME: Implement RL for any register
     op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
-    let new_cy = (cpu.reg.b & 0b10000000) >> 7;
-    cpu.reg.b <<= 1;
-    cpu.reg.b |= cpu.reg.f.carry as u8; // TODO: Is CY carry?
-    cpu.reg.f.carry = new_cy != 0;
+    rl_d8(&mut cpu.reg.b, &mut cpu.reg.f);
 } // RL B  [Z/0/0/C]
 fn cb_execute_11(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -2116,9 +2173,10 @@ fn cb_execute_36(cpu: &mut Cpu) {
     cpu.cycles += 4;
 } // SWAP (HL)  [Z/0/0/0]
 fn cb_execute_37(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    cpu.reg.a = swap_u8(cpu.reg.a);
 } // SWAP A  [Z/0/0/0]
 fn cb_execute_38(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -3135,12 +3193,62 @@ mod tests {
         cpu.reg.reset();
         cpu.reg.set_bc(0xABCD);
         let word = cpu.reg.bc();
-        push_word(&mut cpu, word);
+        cpu.push_word(word);
         cpu.reg.set_bc(0xBEEF);
         assert_eq!(cpu.reg.bc(), 0xBEEF);
         let word = pop_word(&mut cpu);
         cpu.reg.set_bc(word);
         assert_eq!(cpu.reg.bc(), 0xABCD);
+    }
+
+    #[test]
+    fn swap_u8_ok() {
+        assert_eq!(swap_u8(0b1100_1001), 0b1001_1100);
+    }
+
+    #[test]
+    fn cp_d8_match() {
+        let mut cpu = Cpu::new();
+        cpu.reg.b = 0b01001001;
+        cpu.reg.a = 0b01001001;
+        let byte = cpu.reg.b;
+        cp_d8(&mut cpu, byte);
+        assert!(cpu.reg.f.zero);
+        assert!(!cpu.reg.f.carry);
+        assert!(cpu.reg.f.sub);
+        assert!(!cpu.reg.f.half_carry);
+    }
+
+    #[test]
+    fn rl_d8_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.f.carry = true;
+        cpu.reg.b = 0b01101010;
+        rl_d8(&mut cpu.reg.b, &mut cpu.reg.f);
+        assert_eq!(cpu.reg.b, 0b11010101);
+        assert!(!cpu.reg.f.carry);
+    }
+
+    #[test]
+    fn dec_d8_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.b = 1;
+        dec_d8(&mut cpu.reg.b, &mut cpu.reg.f);
+        assert_eq!(cpu.reg.b, 0);
+        assert!(cpu.reg.f.zero);
+        assert!(!cpu.reg.f.carry);
+        assert!(cpu.reg.f.sub);
+    }
+
+    #[test]
+    fn dec_d8_carry() {
+        let mut cpu = Cpu::new();
+        cpu.reg.c = 0;
+        dec_d8(&mut cpu.reg.c, &mut cpu.reg.f);
+        assert_eq!(cpu.reg.c, u8::MAX);
+        assert!(!cpu.reg.f.zero);
+        assert!(cpu.reg.f.carry);
+        assert!(cpu.reg.f.sub);
     }
 
     #[test]
