@@ -36,18 +36,19 @@ fn main() {
 
     // Create CPU
     let mut cpu = Cpu::new();
-    // cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/cpu_instrs.gb");
-    cpu.mmu.cartridge.load("test.gb");
+    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
+    // cpu.mmu.cartridge.load("test.gb");
+    // cpu.mmu.cartridge.load("tetris.gb");
     cpu.mmu.load_bootrom("bootix_dmg.bin");
 
-    let mut _graphics = Graphics::new();
+    let mut graphics = Graphics::new();
 
     // Emulation loop
     let mut cycles = 0;
     let mut instr_count = 0;
     let mut cycle_count = 0;
     let max_cycles = CLOCK_SPEED / 60;
-    let _quit_at = 42000;
+    let _quit_at = 695000;
     let mut _debug_ticker = 0;
 
     'running: while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -64,20 +65,19 @@ fn main() {
         // One second of CPU execution ~ 4194304 cycles
         while cycles < max_cycles {
             cpu.tick(); // Advance the CPU
-            if instr_count >= _quit_at && false {
+            if instr_count >= _quit_at {
                 break 'running;
             }
             cycles += cpu.cycles;
             cycle_count += cpu.cycles;
             instr_count += 1;
-            // graphics.update(&mut cpu.mmu, cpu.cycles);
+            graphics.update(&mut cpu.mmu, cpu.cycles);
             cpu.generate_interrupts();
         }
         _debug_ticker += 1;
         cycles = 0;
 
         // TODO: Reset CPU cycles
-        // Missing: Generate interrupts
         // Missing: Emulate sound
         // Missing: Emulate other software
         // Missing: Time synchronisation

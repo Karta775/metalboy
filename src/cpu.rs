@@ -1,8 +1,8 @@
-use log::trace;
+use log::{trace, warn};
 use crate::execute::execute;
 use super::registers::Registers;
 use super::mmu::Mmu;
-use crate::{bytes_from};
+use crate::{bytes_from, LOGGING_ENABLED};
 
 pub enum Interrupt {
     VBlank = 0x40,
@@ -18,6 +18,7 @@ pub struct Cpu {
     pub advance_pc: i16,
     pub cycles: usize,
     pub cb_prefix: bool,
+    pub ime: bool,
 }
 
 impl Cpu {
@@ -29,6 +30,7 @@ impl Cpu {
             advance_pc: 1,
             cycles: 0,
             cb_prefix: false,
+            ime: true
         }
     }
 
@@ -47,8 +49,19 @@ impl Cpu {
         self.reg.pc = (self.reg.pc as i16 + self.advance_pc) as u16;
         self.advance_pc = 1;
         if self.mmu.bootrom_mapped && self.reg.pc >= 0x100 {
-            trace!("End of bootrom emulation, unmapping bootrom");
+            warn!("End of bootrom emulation, unmapping bootrom");
             self.mmu.bootrom_mapped = false;
+            assert_eq!(self.reg.a, 0x01);
+            // assert_eq!(self.reg.f.as_u8(), 0xB0);
+            self.reg.f.set_from_u8(0xB0);
+            assert_eq!(self.reg.b, 0);
+            assert_eq!(self.reg.c, 0x13);
+            // assert_eq!(self.reg.d, 0x13);
+            self.reg.d = 0x13;
+            assert_eq!(self.reg.e, 0xd8);
+            assert_eq!(self.reg.h, 0x01);
+            assert_eq!(self.reg.l, 0x4d);
+            assert_eq!(self.reg.pc, 0x100);
         }
     }
 

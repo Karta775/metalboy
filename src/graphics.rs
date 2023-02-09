@@ -19,7 +19,7 @@ impl Graphics {
 
     pub fn update(&mut self, mmu: &mut Mmu, cycles: usize) {
         if self.lcd_enabled {
-            self.scanline_count -= cycles as i32; // FIXME: This is definitely bad code
+            self.scanline_count -= cycles as i32;
         } else {
             return ();
         }
@@ -31,7 +31,7 @@ impl Graphics {
 
             // VBlank Period
             if current_line == 144 {
-                // TODO: Request interrupt
+                mmu.request_interrupt(0);
             }
 
             // Reset back to scanline 0

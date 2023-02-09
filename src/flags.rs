@@ -17,7 +17,8 @@ impl Flags {
     }
 
     pub fn compute_half_carry_add(&mut self, left: u8, right: u8) {
-        self.half_carry = ((left & 0xf) + (right & 0xf)) & 0x10 == 0x10;
+        let add = u8::wrapping_add(left & 0xf, right & 0xf);
+        self.half_carry = add & 0x10 == 0x10;
     }
 
     pub fn compute_half_carry_sub(&mut self, left: u8, right: u8) {
@@ -34,7 +35,15 @@ impl Flags {
         return f;
     }
 
+    pub fn clear(&mut self) {
+        self.zero = false;
+        self.sub = false;
+        self.half_carry = false;
+        self.carry = false;
+    }
+
     pub fn set_from_u8(&mut self, f: u8) {
+        // FIXME: Might be totally wrong
         self.zero =       ((f >> 7) & 1) == 1;
         self.sub =        ((f >> 6) & 1) == 1;
         self.half_carry = ((f >> 5) & 1) == 1;
