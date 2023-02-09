@@ -1,8 +1,8 @@
-use log::{trace, warn};
+use log::warn;
 use crate::execute::execute;
 use super::registers::Registers;
 use super::mmu::Mmu;
-use crate::{bytes_from, LOGGING_ENABLED};
+use crate::bytes_from;
 
 pub enum Interrupt {
     VBlank = 0x40,

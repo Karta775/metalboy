@@ -7,3 +7,4 @@
 
 # Ignore the opcodes JSON file
 scripts/opcodes.json
+gb-test-roms

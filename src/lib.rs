@@ -22,6 +22,22 @@ fn bytes_from(word: u16) -> (u8, u8) {
     (left, right)
 }
 
+fn check_bit(byte: u8, bit: u8) -> bool {
+    (byte >> bit) & 1 == 1
+}
+
+fn set_bit(byte: &mut u8, bit: u8) {
+    *byte |= (1 << bit);
+}
+
+fn unset_bit(byte: &mut u8, bit: u8) {
+    *byte &= !(1 << bit);
+}
+
+fn toggle_bit(byte: &mut u8, bit: u8) {
+    *byte ^= (1 << bit);
+}
+
 #[cfg(test)]
 mod tests {
     use crate::word_from;

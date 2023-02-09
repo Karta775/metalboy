@@ -16,6 +16,7 @@ pub struct Mmu {
 impl Mmu {
     pub fn new() -> Self {
         Self {
+            // TODO: Consider switching to one array and taking slices
             bootrom: [0; 256],
             bootrom_mapped: true,
             cartridge: Cartridge::new(),
@@ -72,16 +73,28 @@ impl Mmu {
             0xE000..=0xFDFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ECHO RAM", byte, address), // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => error!("Writing to non-existent memory: {:02x} -> ({:04x}) OAM", byte, address), // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
-            0xFF00..=0xFF7F => self.io[address as usize - 0xFF00] = byte, // I/O Registers
+            0xFF00..=0xFF7F => {
+                match address {
+                    0xFF46 => self.dma_transfer(byte),
+                    _ => self.io[address as usize - 0xFF00] = byte
+                }
+            }, // I/O Registers
             0xFF80..=0xFFFE => self.hram[address as usize - 0xFF80] = byte, // High RAM (HRAM)
                      0xFFFF => self.ie = byte, // Interrupts Enable Register (IE)
             _ => {} // Clion requires this catch-all even though the match is exhaustive :(
         }
     }
 
+    pub fn dma_transfer(&mut self, data: u8) {
+        let address: u16 = (data as u16) << 8;
+        for i in 0x00..0xA0 {
+            self.set(0xFE00 + i, self.get(address + i));
+        }
+    }
+
     pub fn request_interrupt(&mut self, id: u8) {
         let mut interrupt_flag = self.get(0xFF0F);
-        interrupt_flag |= (1 << id);
+        interrupt_flag |= 1 << id;
         self.set(0xFF0F, interrupt_flag);
     }
 }

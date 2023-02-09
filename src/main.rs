@@ -36,9 +36,9 @@ fn main() {
 
     // Create CPU
     let mut cpu = Cpu::new();
-    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
+    // cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
     // cpu.mmu.cartridge.load("test.gb");
-    // cpu.mmu.cartridge.load("tetris.gb");
+    cpu.mmu.cartridge.load("tetris.gb");
     cpu.mmu.load_bootrom("bootix_dmg.bin");
 
     let mut graphics = Graphics::new();
@@ -48,14 +48,23 @@ fn main() {
     let mut instr_count = 0;
     let mut cycle_count = 0;
     let max_cycles = CLOCK_SPEED / 60;
-    let _quit_at = 695000;
+    // let _quit_at = 695000;
+    let _quit_at = 69995000;
     let mut _debug_ticker = 0;
 
     'running: while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in buffer.iter_mut() {
-            *i = 0xFFFFFF; // write something more funny here!
+        for col in 0..WIDTH {
+            for row in 0..HEIGHT {
+                buffer[(WIDTH * row) + col] = graphics.fb[col][row];
+                if buffer[(WIDTH * row) + col] < 0xFFFFFF {
+                    println!("pixel at {} x {} == {:06x}", col, row, buffer[(WIDTH * row) + col]);
+                }
+            }
         }
-        buffer[_debug_ticker] = 0x000000;
+        // for i in buffer.iter_mut() {
+        //     *i = 0xFFFFFF; // write something more funny here!
+        // }
+        // buffer[_debug_ticker] = 0x000000;
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
         window
