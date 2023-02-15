@@ -855,9 +855,11 @@ fn execute_25(cpu: &mut Cpu) {
     cpu.cycles += 1;
 } // DEC H  [Z/1/H/-]
 fn execute_26(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
+    let byte = cpu.get_op(1);
+    ld_d8(&mut cpu.reg.h, byte);
 } // LD H d8 [-/-/-/-]
 fn execute_27(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -950,9 +952,11 @@ fn execute_35(cpu: &mut Cpu) {
     cpu.cycles += 3;
 } // DEC (HL)  [Z/1/H/-]
 fn execute_36(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 3;
+    let byte = cpu.get_op(1);
+    ld_mem_d8(cpu, cpu.reg.hl(), byte);
 } // LD (HL) d8 [-/-/-/-]
 fn execute_37(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -994,7 +998,8 @@ fn execute_3e(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
-    cpu.reg.a = cpu.mmu.get(cpu.reg.pc + 1);
+    let byte = cpu.get_op(1);
+    ld_d8(&mut cpu.reg.a, byte);
 } // LD A d8 [-/-/-/-]
 fn execute_3f(cpu: &mut Cpu) {
     op_unimplemented(cpu);
