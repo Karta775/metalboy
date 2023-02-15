@@ -15,8 +15,8 @@ pub struct Graphics {
 }
 
 pub enum TileNumber {
-    Signed(i8),
-    Unsigned(u8)
+    Signed(i16),
+    Unsigned(u16)
 }
 
 impl Graphics {
@@ -67,7 +67,7 @@ impl Graphics {
             self.render_tiles(mmu);
         }
         if check_bit(control, 1) {
-            // TODO: Render sprites
+            self.render_sprites(mmu);
         }
     }
 
@@ -113,38 +113,100 @@ impl Graphics {
             y = mmu.get(0xFF44) + scroll_y
         }
 
-
         // Draw the pixels for the current scanline
-        let tile_row = (y as u16 / 8) * 32;
+        let tile_row: u16 = (y / 8) as u16 * 32;
         for i in 0..160 {
-            let mut x: u16 = (i as u16 + scroll_x as u16) as u16;
-            if window_enabled && i > window_x {
-                x = (i - window_x) as u16;
+            let mut x: u8 = i + scroll_x;
+            if window_enabled && i >= window_x {
+                x = i - window_x;
             }
 
-            let tile_column: u16 = x as u16 / 8;
+            let tile_column = (x / 8) as u16;
             let tile_address = bg_memory + tile_row + tile_column;
             let tile_no: TileNumber = if unsigned {
-                Unsigned(mmu.get(tile_address))
+                Unsigned(mmu.get(tile_address) as u16)
             } else {
-                Signed(mmu.get(tile_address) as i8)
+                Signed(mmu.get(tile_address) as i16)
             };
 
             let tile_location: u16 = match tile_no {
-                Signed(n) => tile_data + (n * 16) as u16,
-                Unsigned(n) => tile_data + (((n as u16) + 128) * 16) as u16
+                Unsigned(n) => tile_data + (n.wrapping_mul(16)) as u16,
+                Signed(n) => (tile_data + (((n as u16) + 128) * 16)) as u16
             };
 
             let line: u8 = (y % 8) * 2;
             let data_1 = mmu.get(tile_location + line as u16);
             let data_2 = mmu.get(tile_location + line as u16 + 1);
 
-            let colour_bit = (((x as i16 % 8) - 7) * -1) as u8;
+            let colour_bit = (((x % 8) as i8 - 7) * -1) as u8;
             let mut colour_no = check_bit(data_2, colour_bit) as u8;
             colour_no = (colour_no << 1) | (check_bit(data_1, colour_bit) as u8);
 
             let y = mmu.get(0xFF44);
-            self.fb[i as usize][y as usize] = self.get_colour(colour_no, mmu.get(0xFF47));
+            let colour = self.get_colour(colour_no, mmu.get(0xFF47));
+            self.fb[i as usize][y as usize] = colour;
+        }
+    }
+
+    fn render_sprites(&mut self, mmu: &mut Mmu) {
+        let control = mmu.get(LCD_CONTROL);
+        let tall_sprite = check_bit(control, 2);
+        let y_size = if tall_sprite { 16 } else { 8 };
+
+        for sprite in 0..40 {
+            let index = sprite * 4;
+            // let y = mmu.get(0xFE00 + index) - 16;
+            // FIXME: DEBUGGING
+            let (y, cancel) = mmu.get(0xFE00 + index).overflowing_sub(16);
+            if cancel {
+                continue;
+            }
+            let x = mmu.get(0xFE00 + index + 1) - 8;
+            let tile_location = mmu.get(0xFE00 + index + 2);
+            let attributes = mmu.get(0xFE00 + index + 3);
+
+            let y_flip = check_bit(attributes, 6);
+            let x_flip = check_bit(attributes, 5);
+
+            let scanline = mmu.get(0xFF44);
+
+            if scanline >= y && scanline < y + y_size {
+                let mut line = (scanline as i16) - y as i16;
+
+                // Flipped on the y axis
+                if y_flip {
+                    line = (line - y_size as i16) * -1;
+                }
+                line *= 2;
+
+                let tile_data_address = line as u16 + 0x8000 + (tile_location as u16 * 16);
+                let data_1 = mmu.get(tile_data_address);
+                let data_2 = mmu.get(tile_data_address + 1);
+
+                for sprite_pixel in (0..8).rev() {
+                    let mut colour_bit = sprite_pixel;
+                    if x_flip {
+                        colour_bit = ((colour_bit as i16 - 7) * -1) as u8;
+                    }
+
+                    let mut colour_no = check_bit(data_2, colour_bit) as u8;
+                    colour_no = (colour_no << 1) | (check_bit(data_1, colour_bit) as u8);
+                    let palette_select = check_bit(attributes, 4) as u16;
+                    let palette = mmu.get(0xFF48 + palette_select);
+                    let colour = self.get_colour(colour_no, palette);
+
+                    // White should be skipped due to transparency
+                    if colour == 0xFFFFFF {
+                        continue;
+                    }
+
+                    let x_pixel: i16 = (0 - sprite_pixel as i16) + 7;
+                    let pixel = x_pixel + x as i16;
+
+                    // Draw the pixel to the framebuffer
+                    self.fb[pixel as usize][scanline as usize] = colour;
+                }
+            }
         }
     }
 }

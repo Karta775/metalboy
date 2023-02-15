@@ -75,6 +75,14 @@ impl Registers {
         self.h = h;
         self.l = l;
     }
+
+    pub fn inc_hl_nf(&mut self) {
+        self.set_hl(self.hl().wrapping_add(1));
+    }
+
+    pub fn dec_hl_nf(&mut self) {
+        self.set_hl(self.hl().wrapping_sub(1));
+    }
 }
 
 #[cfg(test)]
