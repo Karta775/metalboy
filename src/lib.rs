@@ -27,7 +27,7 @@ fn check_bit(byte: u8, bit: u8) -> bool {
 }
 
 fn set_bit(byte: &mut u8, bit: u8) {
-    *byte |= (1 << bit);
+    *byte |= 1 << bit;
 }
 
 fn unset_bit(byte: &mut u8, bit: u8) {
@@ -35,15 +35,28 @@ fn unset_bit(byte: &mut u8, bit: u8) {
 }
 
 fn toggle_bit(byte: &mut u8, bit: u8) {
-    *byte ^= (1 << bit);
+    *byte ^= 1 << bit;
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::word_from;
+    use crate::{check_bit, set_bit, word_from};
 
     #[test]
     fn word_from_ok() {
         assert_eq!(word_from(0xBE, 0xEF), 0xBEEF);
+    }
+
+    #[test]
+    fn check_bit_ok() {
+        assert!(check_bit(0b01101010, 1));
+        assert!(!check_bit(0b01101010, 2));
+    }
+
+    #[test]
+    fn set_bit_ok() {
+        let mut byte = 0b10101010;
+        set_bit(&mut byte, 6);
+        assert_eq!(byte, 0b11101010);
     }
 }
