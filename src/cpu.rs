@@ -19,6 +19,7 @@ pub struct Cpu {
     pub cycles: usize,
     pub cb_prefix: bool,
     pub ime: bool,
+    pub _tmp_warn_count: usize,
 }
 
 impl Cpu {
@@ -30,7 +31,8 @@ impl Cpu {
             advance_pc: 1,
             cycles: 0,
             cb_prefix: false,
-            ime: true
+            ime: true,
+            _tmp_warn_count: 0,
         }
     }
 
@@ -52,12 +54,10 @@ impl Cpu {
             warn!("End of bootrom emulation, unmapping bootrom");
             self.mmu.bootrom_mapped = false;
             assert_eq!(self.reg.a, 0x01);
-            // assert_eq!(self.reg.f.as_u8(), 0xB0);
-            self.reg.f.set_from_u8(0xB0);
+            assert_eq!(self.reg.f.as_u8(), 0xB0);
             assert_eq!(self.reg.b, 0);
             assert_eq!(self.reg.c, 0x13);
             // assert_eq!(self.reg.d, 0x13);
-            self.reg.d = 0x13;
             assert_eq!(self.reg.e, 0xd8);
             assert_eq!(self.reg.h, 0x01);
             assert_eq!(self.reg.l, 0x4d);
@@ -83,7 +83,7 @@ impl Cpu {
     }
 
     pub fn generate_interrupt(&mut self, id: u8, interrupt_flag: u8) {
-        // FIXME: Set interrupt master switch to false
+        self.ime = false;
         let cleared = interrupt_flag & (0b1111_1111 ^ (1 << id));
         self.mmu.set(0xFF0F, cleared);
 
@@ -98,7 +98,7 @@ impl Cpu {
     }
 
     pub fn generate_interrupts(&mut self) {
-        if true { // FIXME: Change to check if interrupt master switch is enabled
+        if self.ime {
             let interrupt_flag = self.mmu.get(0xFF0F);
             let interrupt_enable = self.mmu.get(0xFFFF);
 
