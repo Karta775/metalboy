@@ -51,16 +51,17 @@ impl Cpu {
         self.reg.pc = (self.reg.pc as i16 + self.advance_pc) as u16;
         self.advance_pc = 1;
         if self.mmu.bootrom_mapped && self.reg.pc >= 0x100 {
-            warn!("End of bootrom emulation, unmapping bootrom");
+            // warn!("End of bootrom emulation, unmapping bootrom"); // TODO: Debugging
             self.mmu.bootrom_mapped = false;
             assert_eq!(self.reg.a, 0x01);
             assert_eq!(self.reg.f.as_u8(), 0xB0);
             assert_eq!(self.reg.b, 0);
             assert_eq!(self.reg.c, 0x13);
-            // assert_eq!(self.reg.d, 0x13);
+            assert_eq!(self.reg.d, 0);
             assert_eq!(self.reg.e, 0xd8);
             assert_eq!(self.reg.h, 0x01);
             assert_eq!(self.reg.l, 0x4d);
+            assert_eq!(self.reg.sp, 0xFFFE);
             assert_eq!(self.reg.pc, 0x100);
         }
     }
@@ -80,6 +81,19 @@ impl Cpu {
         self.mmu.set(self.reg.sp - 1, left);
         self.mmu.set(self.reg.sp - 2, right);
         self.reg.sp -= 2;
+    }
+
+    pub fn and_u8(&mut self, byte: u8) {
+        self.reg.a &= byte;
+        self.reg.f.clear();
+        self.reg.f.zero = self.reg.a == 0;
+        self.reg.f.half_carry = true;
+    }
+
+    pub fn xor_u8(&mut self, byte: u8) {
+        self.reg.a ^= byte;
+        self.reg.f.clear();
+        self.reg.f.zero = self.reg.a == 0;
     }
 
     pub fn generate_interrupt(&mut self, id: u8, interrupt_flag: u8) {

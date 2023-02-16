@@ -36,7 +36,8 @@ fn main() {
 
     // Create CPU
     let mut cpu = Cpu::new();
-    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
+    // cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
+    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/05-op rp.gb");
     // cpu.mmu.cartridge.load("test.gb");
     // cpu.mmu.cartridge.load("tetris.gb");
     cpu.mmu.load_bootrom("dmg_boot.bin");
@@ -49,8 +50,8 @@ fn main() {
     let mut instr_count = 0;
     let mut cycle_count = 0;
     let max_cycles = CLOCK_SPEED / 60;
-    let _quit_at = 69995000;
-    let _max_warnings = 7;
+    let _quit_at = 166666508 + 5;
+    let _max_warnings = 1;
 
     'running: while window.is_open() && !window.is_key_down(Key::Escape) {
         for (i, pixel) in buffer.iter_mut().enumerate() {
@@ -67,16 +68,18 @@ fn main() {
         // One second of CPU execution ~ 4194304 cycles
         while cycles < max_cycles {
             cpu.tick(); // Advance the CPU
-            if instr_count >= _quit_at {
-                break 'running;
-            }
             if cpu._tmp_warn_count >= _max_warnings {
                 println!("Maximum number of warnings reached!");
                 break 'running;
             }
+            if !cpu.mmu.bootrom_mapped {
+                instr_count += 1;
+                if instr_count >= _quit_at {
+                    break 'running;
+                }
+            }
             cycles += cpu.cycles * 4; // FIXME: Is this M-cycles or actual cycles?
             cycle_count += cycles;
-            instr_count += 1;
             graphics.update(&mut cpu.mmu, cpu.cycles * 4);
             cpu.generate_interrupts();
         }
@@ -87,6 +90,6 @@ fn main() {
         // Missing: Time synchronisation
     }
 
-    println!("Total instructions executed: {}", instr_count);
-    println!("Total cycles: {}", cycle_count);
+    // println!("Total instructions executed: {}", instr_count);
+    // println!("Total cycles: {}", cycle_count);
 }

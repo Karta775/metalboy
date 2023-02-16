@@ -21,9 +21,19 @@ impl Flags {
         self.half_carry = add & 0x10 == 0x10;
     }
 
+    pub fn compute_half_carry_add_u16(&mut self, left: u16, right: u16) {
+        let add = u16::wrapping_add(left & 0xfff, right & 0xfff);
+        self.half_carry = add & 0x1000 == 0x1000;
+    }
+
     pub fn compute_half_carry_sub(&mut self, left: u8, right: u8) {
         let sub = u8::wrapping_sub(left & 0xf, right & 0xf);
         self.half_carry = sub & 0x10 == 0x10;
+    }
+
+    pub fn compute_half_carry_sub_u16(&mut self, left: u16, right: u16) {
+        let sub = u16::wrapping_sub(left & 0xfff, right & 0xfff);
+        self.half_carry = sub & 0x1000 == 0x1000;
     }
 
     pub fn as_u8(&self) -> u8 {

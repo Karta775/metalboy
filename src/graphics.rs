@@ -110,7 +110,7 @@ impl Graphics {
             y = mmu.get(0xFF44) - window_y;
         } else {
             bg_memory = if check_bit(control, 3) { 0x9C00 } else { 0x9800 };
-            y = mmu.get(0xFF44) + scroll_y
+            y = mmu.get(0xFF44).wrapping_add(scroll_y);
         }
 
         // Draw the pixels for the current scanline

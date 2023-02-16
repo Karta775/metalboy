@@ -1,11 +1,13 @@
 /target
+/gameboy-doctor
 
 # Ignore all ROMs except for tests
 **/*.gb
 **/*.gbc
 !tests/*
+gb-test-roms
+/dmg_boot.bin
 
 # Ignore the opcodes JSON file
 scripts/opcodes.json
-gb-test-roms
-/dmg_boot.bin
+

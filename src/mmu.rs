@@ -13,6 +13,7 @@ pub struct Mmu {
     pub hram: [u8; 128],
     pub oam: [u8; 0xA0],
     pub ie: u8,
+    pub memory: [u8; 0x8000],
 }
 
 impl Mmu {
@@ -28,6 +29,7 @@ impl Mmu {
             hram: [0; 128],
             oam: [0; 0xA0],
             ie: 0,
+            memory: [0; 0x8000],
         }
     }
 
@@ -44,17 +46,18 @@ impl Mmu {
     pub fn get(&self, address: u16) -> u8 {
         if self.bootrom_mapped {
             match address {
-                0x0000..=0x0100 => return self.bootrom[address as usize],
+                0x00..=0xFF => return self.bootrom[address as usize],
                 _ => ()
             }
         }
         match address {
+            // 0xFF44 => 0x90, // TODO: Remove debug code
             0x0000..=0x3FFF => self.cartridge.data[address as usize], // 16KB ROM bank 00
             0x4000..=0x7FFF => self.cartridge.data[address as usize], // 16KB ROM Bank 01~NN
             0x8000..=0x9FFF => self.vram[address as usize - 0x8000], // 8KB Video RAM (VRAM)
-            0xA000..=0xBFFF => {error!("Reading non-existent memory: ({:04x}) EXT RAM", address);0}, // 8KB External RAM
-            0xC000..=0xCFFF => self.wram[address as usize - 0xC000], // 4KB Work RAM (WRAM) bank 0
-            0xD000..=0xDFFF => {error!("Reading non-existent memory: ({:04x}) WRAM 0~N", address);0}, // 4KB Work RAM (WRAM) bank 1~N
+            0xA000..=0xBFFF => self.memory[address as usize - 0x8000], // 8KB External RAM
+            0xC000..=0xCFFF => self.memory[address as usize - 0x8000], // 4KB Work RAM (WRAM) bank 0
+            0xD000..=0xDFFF => self.memory[address as usize - 0x8000], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
             0xE000..=0xFDFF => {error!("Reading non-existent memory: ({:04x}) ECHO RAM", address);0}, // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => self.oam[address as usize - 0xFE00], // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => {error!("Reading non-existent memory: ({:04x}) UNUSABLE", address);0}, // Not usable
@@ -73,9 +76,9 @@ impl Mmu {
             0x8000..=0x9FFF => {
                 self.vram[address as usize - 0x8000] = byte
             }, // 8KB Video RAM (VRAM)
-            0xA000..=0xBFFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) EXT RAM", byte, address), // 8KB External RAM
-            0xC000..=0xCFFF => self.wram[address as usize - 0xC000] = byte, // 4KB Work RAM (WRAM) bank 0
-            0xD000..=0xDFFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) WRAM 1~N", byte, address), // 4KB Work RAM (WRAM) bank 1~N
+            0xA000..=0xBFFF => self.memory[address as usize - 0x8000] = byte, // 8KB External RAM
+            0xC000..=0xCFFF => self.memory[address as usize - 0x8000] = byte, // 4KB Work RAM (WRAM) bank 0
+            0xD000..=0xDFFF => self.memory[address as usize - 0x8000] = byte, // 4KB Work RAM (WRAM) bank 1~N // TODO: Banking
             0xE000..=0xFDFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ECHO RAM", byte, address), // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => { self.oam[address as usize - 0xFE00] = byte }, // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
