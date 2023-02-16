@@ -1,4 +1,3 @@
-use log::warn;
 use crate::execute::execute;
 use super::registers::Registers;
 use super::mmu::Mmu;
@@ -74,6 +73,34 @@ impl Cpu {
 
     pub fn get_op(&self, offset: u16) -> u8 {
         self.mmu.get(self.reg.pc + offset)
+    }
+
+    pub fn get_reg(&mut self, index: u8) -> u8 {
+        match index {
+            0 => self.reg.b,
+            1 => self.reg.c,
+            2 => self.reg.d,
+            3 => self.reg.e,
+            4 => self.reg.h,
+            5 => self.reg.l,
+            6 => self.mmu.get(self.reg.hl()),
+            7 => self.reg.a,
+            _ => panic!("This is supposed to be unreachable"),
+        }
+    }
+
+    pub fn set_reg(&mut self, index: u8, value: u8) {
+        match index {
+            0 => self.reg.b = value,
+            1 => self.reg.c = value,
+            2 => self.reg.d = value,
+            3 => self.reg.e = value,
+            4 => self.reg.h = value,
+            5 => self.reg.l = value,
+            6 => self.mmu.set(self.reg.hl(), value),
+            7 => self.reg.a = value,
+            _ => panic!("This is supposed to be unreachable"),
+        }
     }
 
     pub fn push_word(&mut self, word: u16) {

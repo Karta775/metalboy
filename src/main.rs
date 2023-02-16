@@ -36,8 +36,8 @@ fn main() {
 
     // Create CPU
     let mut cpu = Cpu::new();
-    // cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
-    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/05-op rp.gb");
+    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
+    // cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/09-op r,r.gb");
     // cpu.mmu.cartridge.load("test.gb");
     // cpu.mmu.cartridge.load("tetris.gb");
     cpu.mmu.load_bootrom("dmg_boot.bin");
@@ -90,6 +90,6 @@ fn main() {
         // Missing: Time synchronisation
     }
 
-    // println!("Total instructions executed: {}", instr_count);
-    // println!("Total cycles: {}", cycle_count);
+    println!("Total instructions executed: {}", instr_count);
+    println!("Total cycles: {}", cycle_count);
 }

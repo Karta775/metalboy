@@ -34,7 +34,7 @@ fn unset_bit(byte: &mut u8, bit: u8) {
     *byte &= !(1 << bit);
 }
 
-fn toggle_bit(byte: &mut u8, bit: u8) {
+fn _toggle_bit(byte: &mut u8, bit: u8) {
     *byte ^= 1 << bit;
 }
 
