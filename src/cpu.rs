@@ -1,7 +1,8 @@
 use crate::execute::execute;
-use super::registers::Registers;
+use super::registers::{Registers, R8, R16};
+use super::flags::Flags;
 use super::mmu::Mmu;
-use crate::bytes_from;
+use crate::{bytes_from, set_bit, unset_bit};
 
 pub enum Interrupt {
     VBlank = 0x40,
@@ -89,6 +90,19 @@ impl Cpu {
         }
     }
 
+    pub fn get_reg8_mut(&mut self, reg: R8) -> &mut u8 {
+        match reg {
+            R8::A => &mut self.reg.a,
+            R8::B => &mut self.reg.b,
+            R8::C => &mut self.reg.c,
+            R8::D => &mut self.reg.d,
+            R8::E => &mut self.reg.e,
+            R8::H => &mut self.reg.h,
+            R8::L => &mut self.reg.l,
+            R8::HLRam => self.mmu.memory.get_mut(self.reg.hl() as usize).unwrap(),
+        }
+    }
+
     pub fn set_reg(&mut self, index: u8, value: u8) {
         match index {
             0 => self.reg.b = value,
@@ -110,6 +124,26 @@ impl Cpu {
         self.reg.sp -= 2;
     }
 
+    pub fn sub_u8(&mut self, byte: u8) {
+        self.reg.f.compute_half_carry_sub(self.reg.a, byte);
+        (self.reg.a, self.reg.f.carry) = u8::overflowing_sub(self.reg.a, byte);
+        self.reg.f.sub = true;
+        self.reg.f.zero = self.reg.a == 0;
+    }
+
+    pub fn sbc_u8(&mut self, byte: u8) {
+        let old_cy = self.reg.f.carry as u8;
+        let (r1, cy1) = u8::overflowing_sub(self.reg.a, byte);
+        let (r2, cy2) = u8::overflowing_sub(r1, old_cy);
+        let h1 = Flags::half_carry_sub_occurred(self.reg.a, byte);
+        let h2 = Flags::half_carry_sub_occurred(r1, old_cy);
+        self.reg.a = r2;
+        self.reg.f.sub = true;
+        self.reg.f.zero = self.reg.a == 0;
+        self.reg.f.half_carry = h1 || h2;
+        self.reg.f.carry = cy1 || cy2;
+    }
+
     pub fn and_u8(&mut self, byte: u8) {
         self.reg.a &= byte;
         self.reg.f.clear();
@@ -121,6 +155,112 @@ impl Cpu {
         self.reg.a ^= byte;
         self.reg.f.clear();
         self.reg.f.zero = self.reg.a == 0;
+    }
+
+    pub fn rlc(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let b7 = (*reg & 0b10000000) >> 7;
+        *reg <<= 1;
+        *reg |= b7;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b7 != 0;
+    }
+
+    pub fn rrc(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let b0 = *reg & 1;
+        *reg >>= 1;
+        *reg |= b0 << 7;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b0 != 0;
+    }
+
+    pub fn rl(&mut self, reg: R8) {
+        let old_cy = self.reg.f.carry as u8;
+        let reg = self.get_reg8_mut(reg);
+        let b7 = (*reg & 0b10000000) >> 7;
+        *reg <<= 1;
+        *reg |= old_cy;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b7 != 0;
+    }
+
+    pub fn rr(&mut self, reg: R8) {
+        let old_cy = self.reg.f.carry as u8;
+        let reg = self.get_reg8_mut(reg);
+        let b0 = *reg & 1;
+        *reg >>= 1;
+        *reg |= old_cy << 7;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b0 != 0;
+    }
+
+    pub fn sla(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let b7 = (*reg & 0b10000000) >> 7;
+        *reg <<= 1;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b7 != 0;
+    }
+
+    pub fn sra(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let b0 = *reg & 1;
+        *reg >>= 1;
+        *reg |= b0 << 7;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b0 != 0;
+    }
+
+    pub fn swap(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let left = *reg >> 4;
+        let right = (*reg & 0xf) << 4;
+        *reg = right | left;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = false;
+    }
+
+    pub fn srl(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let b0 = *reg & 1;
+        *reg >>= 1;
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = b0 != 0;
+    }
+
+    pub fn bit(&mut self, index: u8, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let bit = *reg & (1 << index);
+        self.reg.f.zero = bit == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = true;
+    }
+
+    pub fn res(&mut self, index: u8, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        unset_bit(reg, index);
+    }
+
+    pub fn set(&mut self, index: u8, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        set_bit(reg, index);
     }
 
     pub fn generate_interrupt(&mut self, id: u8, interrupt_flag: u8) {
@@ -158,6 +298,7 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use crate::cpu::Cpu;
+    use crate::registers::R8;
 
     #[test]
     fn generate_interrupts_ok() {
@@ -186,5 +327,13 @@ mod tests {
         let initial_state = cpu.reg.pc;
         cpu.tick();
         assert_eq!(cpu.reg.pc, initial_state + 1);
+    }
+
+    #[test]
+    fn rlc_ok() {
+        let mut cpu = Cpu::new();
+        cpu.reg.d = 0b10101010;
+        cpu.rlc(R8::D);
+        assert_eq!(cpu.reg.d, 0b01010101);
     }
 }

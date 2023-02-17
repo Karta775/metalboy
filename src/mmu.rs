@@ -12,7 +12,6 @@ pub struct Mmu {
     pub io: [u8; 0x80],
     pub hram: [u8; 128],
     pub oam: [u8; 0xA0],
-    pub ie: u8,
     pub memory: [u8; 0x8000],
 }
 
@@ -28,7 +27,6 @@ impl Mmu {
             io: [0; 0x80],
             hram: [0; 128],
             oam: [0; 0xA0],
-            ie: 0,
             memory: [0; 0x8000],
         }
     }
@@ -44,52 +42,52 @@ impl Mmu {
 
     #[allow(unreachable_patterns)]
     pub fn get(&self, address: u16) -> u8 {
+        let split_address = address as usize % 0x8000;
         if self.bootrom_mapped {
             match address {
-                0x00..=0xFF => return self.bootrom[address as usize],
+                0x00..=0xFF => return self.bootrom[split_address],
                 _ => ()
             }
         }
         match address {
             // 0xFF44 => 0x90, // TODO: Remove debug code
-            0x0000..=0x3FFF => self.cartridge.data[address as usize], // 16KB ROM bank 00
-            0x4000..=0x7FFF => self.cartridge.data[address as usize], // 16KB ROM Bank 01~NN
-            0x8000..=0x9FFF => self.vram[address as usize - 0x8000], // 8KB Video RAM (VRAM)
-            0xA000..=0xBFFF => self.memory[address as usize - 0x8000], // 8KB External RAM
-            0xC000..=0xCFFF => self.memory[address as usize - 0x8000], // 4KB Work RAM (WRAM) bank 0
-            0xD000..=0xDFFF => self.memory[address as usize - 0x8000], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
+            0x0000..=0x3FFF => self.cartridge.data[split_address], // 16KB ROM bank 00
+            0x4000..=0x7FFF => self.cartridge.data[split_address], // 16KB ROM Bank 01~NN
+            0x8000..=0x9FFF => self.memory[split_address], // 8KB Video RAM (VRAM)
+            0xA000..=0xBFFF => self.memory[split_address], // 8KB External RAM
+            0xC000..=0xCFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 0
+            0xD000..=0xDFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
             0xE000..=0xFDFF => {error!("Reading non-existent memory: ({:04x}) ECHO RAM", address);0}, // Mirror of C000~DDFF (ECHO RAM)
-            0xFE00..=0xFE9F => self.oam[address as usize - 0xFE00], // Sprite attribute table (OAM)
+            0xFE00..=0xFE9F => self.memory[split_address], // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => {error!("Reading non-existent memory: ({:04x}) UNUSABLE", address);0}, // Not usable
-            0xFF00..=0xFF7F => self.io[address as usize - 0xFF00], // I/O Registers
-            0xFF80..=0xFFFE => self.hram[address as usize - 0xFF80], // High RAM (HRAM)
-                     0xFFFF => self.ie, // Interrupts Enable Register (IE)
+            0xFF00..=0xFF7F => self.memory[split_address], // I/O Registers
+            0xFF80..=0xFFFE => self.memory[split_address], // High RAM (HRAM)
+                     0xFFFF => self.memory[split_address], // Interrupts Enable Register (IE)
             _ => 0 // Clion requires this catch-all even though the match is exhaustive :(
         }
     }
 
     pub fn set(&mut self, address: u16, byte: u8) {
+        let split_address = address as usize % 0x8000;
         #[allow(unreachable_patterns)]
         match address {
             0x0000..=0x3FFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 00", byte, address), // 16KB ROM bank 00
             0x4000..=0x7FFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 01~NN", byte, address), // 16KB ROM Bank 01~NN
-            0x8000..=0x9FFF => {
-                self.vram[address as usize - 0x8000] = byte
-            }, // 8KB Video RAM (VRAM)
-            0xA000..=0xBFFF => self.memory[address as usize - 0x8000] = byte, // 8KB External RAM
-            0xC000..=0xCFFF => self.memory[address as usize - 0x8000] = byte, // 4KB Work RAM (WRAM) bank 0
-            0xD000..=0xDFFF => self.memory[address as usize - 0x8000] = byte, // 4KB Work RAM (WRAM) bank 1~N // TODO: Banking
+            0x8000..=0x9FFF => self.memory[split_address] = byte, // 8KB Video RAM (VRAM)
+            0xA000..=0xBFFF => self.memory[split_address] = byte, // 8KB External RAM
+            0xC000..=0xCFFF => self.memory[split_address] = byte, // 4KB Work RAM (WRAM) bank 0
+            0xD000..=0xDFFF => self.memory[split_address] = byte, // 4KB Work RAM (WRAM) bank 1~N // TODO: Banking
             0xE000..=0xFDFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ECHO RAM", byte, address), // Mirror of C000~DDFF (ECHO RAM)
-            0xFE00..=0xFE9F => { self.oam[address as usize - 0xFE00] = byte }, // Sprite attribute table (OAM)
+            0xFE00..=0xFE9F => self.memory[split_address] = byte , // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
             0xFF00..=0xFF7F => {
                 match address {
                     0xFF46 => self.dma_transfer(byte),
-                    _ => self.io[address as usize - 0xFF00] = byte
+                    _ => self.memory[split_address] = byte
                 }
             }, // I/O Registers
-            0xFF80..=0xFFFE => self.hram[address as usize - 0xFF80] = byte, // High RAM (HRAM)
-                     0xFFFF => self.ie = byte, // Interrupts Enable Register (IE)
+            0xFF80..=0xFFFE => self.memory[split_address] = byte, // High RAM (HRAM)
+                     0xFFFF => self.memory[split_address] = byte, // Interrupts Enable Register (IE)
             _ => {} // Clion requires this catch-all even though the match is exhaustive :(
         }
     }

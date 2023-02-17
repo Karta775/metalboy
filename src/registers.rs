@@ -1,6 +1,40 @@
 use crate::{word_from, bytes_from};
 use crate::flags::Flags;
 
+#[derive(PartialEq)]
+pub enum R8 {
+    A,
+    B, C,
+    D, E,
+    H, L,
+    HLRam
+}
+
+impl R8 {
+    pub fn from_spec(index: u8) -> Self {
+        match index {
+            0 => Self::B,
+            1 => Self::C,
+            2 => Self::D,
+            3 => Self::E,
+            4 => Self::H,
+            5 => Self::L,
+            6 => Self::HLRam,
+            7 => Self::A,
+            _ => panic!("This is supposed to be unreachable"),
+        }
+    }
+}
+
+pub enum R16 {
+    AF,
+    BC,
+    DE,
+    HL,
+    SP,
+    PC
+}
+
 pub struct Registers {
     pub a: u8, pub f: Flags,
     pub b: u8, pub c: u8,

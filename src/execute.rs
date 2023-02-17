@@ -3,9 +3,10 @@ use super::decode::decode;
 use log::warn;
 use crate::flags::Flags;
 use crate::{word_from, LOGGING_ENABLED, set_bit, unset_bit};
+use crate::registers::{R8::*, R16::*, Registers, R8};
 
 fn op_implemented(cpu: &Cpu) {
-    if LOGGING_ENABLED { // TODO: Remove debug code
+    if LOGGING_ENABLED && !cpu.mmu.bootrom_mapped { // TODO: Remove debug code
         // debug!("I PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
         //     cpu.reg.pc, decode(cpu).expect("Unknown opcode"),
         //     cpu.reg.a, cpu.reg.f.to_string(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
@@ -32,7 +33,41 @@ pub fn execute(cpu: &mut Cpu) {
     if cpu.opcode == 0xCB {
         cpu.cb_prefix = true;
         cpu.opcode = cpu.mmu.get(cpu.reg.pc + 1);
+        cpu.advance_pc = 2; // Every CB instruction is 2 bytes
+
+        let reg_no = (cpu.opcode & 0x0F) % 8;
+        let reg = R8::from_spec(reg_no);
+
+        // Set the appropriate cycles for instructions that use (HL)
+        cpu.cycles = 2; // Most CB instructions take 2 cycles
+        if reg == HLRam {
+            cpu.cycles = match cpu.opcode {
+                0x40..=0x80 => 3,
+                _ => 4
+            }
+        };
+        op_implemented(cpu);
         match cpu.opcode {
+            0x00..=0x07 => cpu.rlc(reg), // RLC
+            0x08..=0x0F => cpu.rrc(reg), // RRC
+            0x10..=0x17 => cpu.rl(reg), // RL
+            0x18..=0x1F => cpu.rr(reg), // RR
+            0x20..=0x27 => cpu.sla(reg), // SLA
+            0x28..=0x2F => cpu.sra(reg), // SRA
+            0x30..=0x37 => cpu.swap(reg), // SWAP
+            0x38..=0x3F => cpu.srl(reg), // SRL
+            0x40..=0x7F => {
+                let bit_index = (cpu.opcode - 0x40) / 8;
+                cpu.bit(bit_index, reg);
+            } // BIT
+            0x80..=0xBF => {
+                let bit_index = (cpu.opcode - 0x80) / 8;
+                cpu.res(bit_index, reg);
+            } // RES
+            0xC0..=0xFF => {
+                let bit_index = (cpu.opcode - 0x80) / 8;
+                cpu.set(bit_index, reg);
+            } // SET
             0x00 => cb_execute_00(cpu),
             0x01 => cb_execute_01(cpu),
             0x02 => cb_execute_02(cpu),
@@ -295,16 +330,39 @@ pub fn execute(cpu: &mut Cpu) {
         cpu.cb_prefix = false;
         match cpu.opcode {
             0x40..=0x7F => {
+                op_implemented(cpu);
                 cpu.advance_pc = 1;
                 cpu.cycles = 1;
-                let reg_1_no = (cpu.opcode & 0x0F) % 8;
-                let reg_2_no = (cpu.opcode - 0x40) / 0x08;
-                let value = cpu.get_reg(reg_1_no);
-                cpu.set_reg(reg_2_no, value);
+                let reg_1_no = (cpu.opcode - 0x40) / 0x08;
+                let reg_2_no = (cpu.opcode & 0x0F) % 8;
+                let value = cpu.get_reg(reg_2_no);
+                cpu.set_reg(reg_1_no, value);
                 if reg_1_no == 6 || reg_2_no == 6 {
                     cpu.cycles = 2;
                 }
             }, // LD r,r
+            0x80..=0xBF => {
+                op_implemented(cpu);
+                cpu.advance_pc = 1;
+                cpu.cycles = 1;
+                let op_no = (cpu.opcode - 0x80) / 0x08;
+                let reg_2_no = (cpu.opcode & 0x0F) % 8;
+                let byte = cpu.get_reg(reg_2_no);
+                match op_no {
+                    0 => add_a_u8(cpu, byte),
+                    1 => adc_a_u8(cpu, byte),
+                    2 => cpu.sub_u8(byte),
+                    3 => cpu.sbc_u8(byte),
+                    4 => cpu.and_u8(byte),
+                    5 => cpu.xor_u8(byte),
+                    6 => or_u8(cpu, byte),
+                    7 => cp_d8(cpu, byte),
+                    _ => ()
+                };
+                if reg_2_no == 6 {
+                    cpu.cycles = 2;
+                };
+            }, // ARITHMETIC r,r
             0x00 => execute_00(cpu),
             0x01 => execute_01(cpu),
             0x02 => execute_02(cpu),
@@ -515,11 +573,15 @@ fn add_a_u8(cpu: &mut Cpu, byte: u8) {
 
 fn adc_a_u8(cpu: &mut Cpu, byte: u8) {
     let cy = cpu.reg.f.carry as u8;
-    let byte_cy = u8::wrapping_add(byte, cy);
-    cpu.reg.f.compute_half_carry_add(cpu.reg.a, byte_cy);
-    (cpu.reg.a, cpu.reg.f.carry) = u8::overflowing_add(cpu.reg.a, byte_cy);
+    let (byte_plus_cy, c1) = u8::overflowing_add(byte, cy);
+    let (result, c2) = u8::overflowing_add(cpu.reg.a, byte_plus_cy);
+    let h1 = Flags::half_carry_add_occurred(byte, cy);
+    let h2 = Flags::half_carry_add_occurred(cpu.reg.a, byte_plus_cy);
+    cpu.reg.a = result;
     cpu.reg.f.sub = false;
     cpu.reg.f.zero = cpu.reg.a == 0;
+    cpu.reg.f.carry = c1 || c2;
+    cpu.reg.f.half_carry = h1 || h2;
 }
 
 fn add_hl_u16(cpu: &mut Cpu, word: u16) {
@@ -536,15 +598,6 @@ fn sub_u8(cpu: &mut Cpu, byte: u8) {
     cpu.reg.f.sub = true;
     cpu.reg.f.zero = cpu.reg.a == 0;
 }
-
-// fn sbc_a_u8(cpu: &mut Cpu, byte: u8) { FIXME
-//     let cy = cpu.reg.f.carry as u8;
-//     let byte_cy = u8::wrapping_add(byte, cy);
-//     cpu.reg.f.compute_half_carry_add(cpu.reg.a, byte_cy);
-//     (cpu.reg.a, cpu.reg.f.carry) = u8::overflowing_add(cpu.reg.a, byte_cy);
-//     cpu.reg.f.sub = false;
-//     cpu.reg.f.zero = cpu.reg.a == 0;
-// }
 
 fn cp_d8(cpu: &mut Cpu, byte: u8) {
     cpu.reg.f.compute_half_carry_sub(cpu.reg.a, byte);
@@ -594,24 +647,16 @@ fn ld_mem_d8(cpu: &mut Cpu, address: u16, byte: u8) {
 }
 
 fn rl_d8(reg: &mut u8, flags: &mut Flags) {
-    let new_cy = (*reg & 0b10000000) >> 7;
+    let b7 = (*reg & 0b10000000) >> 7;
     *reg <<= 1;
     *reg |= flags.carry as u8;
     flags.clear();
-    flags.carry = new_cy != 0;
+    flags.carry = b7 != 0;
 }
 
-pub fn srl(reg: &mut u8, flags: &mut Flags) {
-    let new_cy = *reg & 1;
-    *reg >>= 1;
-    *reg |= flags.carry as u8;
-    flags.clear();
-    flags.zero = *reg == 0;
-    flags.carry = new_cy != 0;
-}
 
 pub fn rr(reg: &mut u8, flags: &mut Flags) {
-    let new_cy = *reg & 1;
+    let b0 = *reg & 1;
     *reg >>= 1;
     if flags.carry {
         set_bit(reg, 7);
@@ -620,7 +665,16 @@ pub fn rr(reg: &mut u8, flags: &mut Flags) {
     }
     flags.clear();
     flags.zero = *reg == 0;
-    flags.carry = new_cy != 0;
+    flags.carry = b0 != 0;
+}
+
+pub fn srl(reg: &mut u8, flags: &mut Flags) {
+    let b0 = *reg & 1;
+    *reg >>= 1;
+    *reg |= flags.carry as u8;
+    flags.clear();
+    flags.zero = *reg == 0;
+    flags.carry = b0 != 0;
 }
 
 fn execute_00(cpu: &mut Cpu) {
@@ -666,9 +720,10 @@ fn execute_06(cpu: &mut Cpu) {
     ld_d8(&mut cpu.reg.b, byte);
 } // LD B d8 [-/-/-/-]
 fn execute_07(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    cpu.rlc(A);
 } // RLCA  [0/0/0/C]
 fn execute_08(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -712,9 +767,10 @@ fn execute_0e(cpu: &mut Cpu) {
     ld_d8(&mut cpu.reg.c, byte);
 } // LD C d8 [-/-/-/-]
 fn execute_0f(cpu: &mut Cpu) {
-    op_unimplemented(cpu);
+    op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
+    cpu.rrc(A);
 } // RRCA  [0/0/0/C]
 fn execute_10(cpu: &mut Cpu) {
     op_unimplemented(cpu);
