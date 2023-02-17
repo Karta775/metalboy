@@ -124,14 +124,14 @@ impl Cpu {
         self.reg.sp -= 2;
     }
 
-    pub fn sub_u8(&mut self, byte: u8) {
+    pub fn sub(&mut self, byte: u8) {
         self.reg.f.compute_half_carry_sub(self.reg.a, byte);
         (self.reg.a, self.reg.f.carry) = u8::overflowing_sub(self.reg.a, byte);
         self.reg.f.sub = true;
         self.reg.f.zero = self.reg.a == 0;
     }
 
-    pub fn sbc_u8(&mut self, byte: u8) {
+    pub fn sbc(&mut self, byte: u8) {
         let old_cy = self.reg.f.carry as u8;
         let (r1, cy1) = u8::overflowing_sub(self.reg.a, byte);
         let (r2, cy2) = u8::overflowing_sub(r1, old_cy);
@@ -144,17 +144,34 @@ impl Cpu {
         self.reg.f.carry = cy1 || cy2;
     }
 
-    pub fn and_u8(&mut self, byte: u8) {
+    pub fn and(&mut self, byte: u8) {
         self.reg.a &= byte;
         self.reg.f.clear();
         self.reg.f.zero = self.reg.a == 0;
         self.reg.f.half_carry = true;
     }
 
-    pub fn xor_u8(&mut self, byte: u8) {
+    pub fn xor(&mut self, byte: u8) {
         self.reg.a ^= byte;
         self.reg.f.clear();
         self.reg.f.zero = self.reg.a == 0;
+    }
+
+    pub fn or(&mut self, byte: u8) {
+        self.reg.a |= byte;
+        self.reg.f.zero = self.reg.a == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = false;
+        self.reg.f.carry = false;
+    }
+
+    pub fn cp(&mut self, byte: u8) {
+        let h = Flags::half_carry_sub_occurred(self.reg.a, byte);
+        let (result, carry) = self.reg.a.overflowing_sub(byte);
+        self.reg.f.zero = result == 0;
+        self.reg.f.sub = true;
+        self.reg.f.half_carry = h;
+        self.reg.f.carry = carry;
     }
 
     pub fn rlc(&mut self, reg: R8) {

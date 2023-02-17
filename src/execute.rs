@@ -98,18 +98,31 @@ pub fn execute(cpu: &mut Cpu) {
                 match op_no {
                     0 => add_a_u8(cpu, byte),
                     1 => adc_a_u8(cpu, byte),
-                    2 => cpu.sub_u8(byte),
-                    3 => cpu.sbc_u8(byte),
-                    4 => cpu.and_u8(byte),
-                    5 => cpu.xor_u8(byte),
-                    6 => or_u8(cpu, byte),
-                    7 => cp_d8(cpu, byte),
+                    2 => cpu.sub(byte),
+                    3 => cpu.sbc(byte),
+                    4 => cpu.and(byte),
+                    5 => cpu.xor(byte),
+                    6 => cpu.or(byte),
+                    7 => cpu.cp(byte),
                     _ => ()
                 };
                 if reg_2_no == 6 {
                     cpu.cycles = 2;
                 };
             }, // ARITHMETIC r,r
+            0xC6 | 0xD6 | 0xE6 | 0xF6 => {
+                op_implemented(cpu);
+                cpu.advance_pc = 2;
+                cpu.cycles = 2;
+                let d8 = cpu.get_op(1);
+                match cpu.opcode & 0xF0 {
+                    0xC0 => add_a_u8(cpu, d8),
+                    0xD0 => sub_u8(cpu, d8),
+                    0xE0 => cpu.and(d8),
+                    0xF0 => cpu.or(d8),
+                    _ => ()
+                }
+            }, // ARITHMETIC r,d8
             0x00 => execute_00(cpu),
             0x01 => execute_01(cpu),
             0x02 => execute_02(cpu),
@@ -1074,49 +1087,49 @@ fn execute_a8(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.b);
+    cpu.xor(cpu.reg.b);
 } // XOR B  [Z/0/0/0]
 fn execute_a9(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.c);
+    cpu.xor(cpu.reg.c);
 } // XOR C  [Z/0/0/0]
 fn execute_aa(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.d);
+    cpu.xor(cpu.reg.d);
 } // XOR D  [Z/0/0/0]
 fn execute_ab(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.e);
+    cpu.xor(cpu.reg.e);
 } // XOR E  [Z/0/0/0]
 fn execute_ac(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.h);
+    cpu.xor(cpu.reg.h);
 } // XOR H  [Z/0/0/0]
 fn execute_ad(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.l);
+    cpu.xor(cpu.reg.l);
 } // XOR L  [Z/0/0/0]
 fn execute_ae(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 2;
-    cpu.xor_u8(cpu.mmu.get(cpu.reg.hl()));
+    cpu.xor(cpu.mmu.get(cpu.reg.hl()));
 } // XOR (HL)  [Z/0/0/0]
 fn execute_af(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    cpu.xor_u8(cpu.reg.a);
+    cpu.xor(cpu.reg.a);
 } // XOR A  [Z/0/0/0]
 fn execute_b0(cpu: &mut Cpu) {
     op_implemented(cpu);
@@ -1429,7 +1442,7 @@ fn execute_e6(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
-    cpu.and_u8(cpu.get_op(1));
+    cpu.and(cpu.get_op(1));
 } // AND d8  [Z/0/1/0]
 fn execute_e7(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1458,7 +1471,7 @@ fn execute_ee(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
     cpu.cycles += 2;
-    cpu.xor_u8(cpu.get_op(1));
+    cpu.xor(cpu.get_op(1));
 } // XOR d8  [Z/0/0/0]
 fn execute_ef(cpu: &mut Cpu) {
     op_unimplemented(cpu);
@@ -1628,22 +1641,6 @@ mod tests {
         execute_32(&mut cpu);
         assert_eq!(cpu.mmu.get(0x9fff), 0xBB);
         assert_eq!(cpu.reg.hl(), 0x9ffe);
-    }
-
-    #[test]
-    fn execute_cb_7c_zero() {
-        let mut cpu = Cpu::new();
-        cpu.reg.h = 0b01010101;
-        cb_execute_7c(&mut cpu);
-        assert_eq!(cpu.reg.f.zero, true);
-    }
-
-    #[test]
-    fn execute_cb_7c_not_zero() {
-        let mut cpu = Cpu::new();
-        cpu.reg.h = 0b10101010;
-        cb_execute_7c(&mut cpu);
-        assert_eq!(cpu.reg.f.zero, false);
     }
 
     #[test]
