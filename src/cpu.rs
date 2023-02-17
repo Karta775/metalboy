@@ -216,8 +216,9 @@ impl Cpu {
     pub fn sra(&mut self, reg: R8) {
         let reg = self.get_reg8_mut(reg);
         let b0 = *reg & 1;
+        let b7 = *reg & (1 << 7);
         *reg >>= 1;
-        *reg |= b0 << 7;
+        *reg |= b7;
         self.reg.f.zero = *reg == 0;
         self.reg.f.sub = false;
         self.reg.f.half_carry = false;
