@@ -547,20 +547,25 @@ fn execute_27(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
     cpu.cycles += 1;
-    if !cpu.reg.f.sub {
-        if cpu.reg.f.carry || cpu.reg.a > 0x99 {
-            (cpu.reg.a, cpu.reg.f.carry) = cpu.reg.a.overflowing_add(0x60);
-        }
-        if cpu.reg.f.half_carry || cpu.reg.a & 0x0f > 0x9 {
-            cpu.reg.a = cpu.reg.a.wrapping_add(0x6);
-        }
+    let mut correction = 0;
+    let a = cpu.reg.a;
+
+    // To calculate BCD we add 6 if the lo nibble is greater than 9
+    // I.e. [b]0000_1100 (12) + 0110 (6) = [bcd]0001_0010 (12)
+    if cpu.reg.f.half_carry || (!cpu.reg.f.sub && (a & 0xf) > 9) {
+        correction |= 0x6;
+    }
+    // We also add 0x60 if the accumulator is greater than 0x99
+    if cpu.reg.f.carry || (!cpu.reg.f.sub && a > 0x99) {
+        correction |= 0x60;
+        cpu.reg.f.carry = true;
+    }
+
+    // If a sub occurred prior to DAA then sub the correction, else add the correction
+    if cpu.reg.f.sub {
+        cpu.reg.a = u8::wrapping_sub(a, correction);
     } else {
-        if cpu.reg.f.carry {
-            cpu.reg.a = cpu.reg.a.wrapping_sub(0x60);
-        }
-        if cpu.reg.f.half_carry {
-            cpu.reg.a = cpu.reg.a.wrapping_sub(0x6);
-        }
+        cpu.reg.a = u8::wrapping_add(a, correction);
     }
     cpu.reg.f.zero = cpu.reg.a == 0;
     cpu.reg.f.half_carry = false;
