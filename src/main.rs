@@ -1,6 +1,8 @@
 extern crate log;
 use metalboy::cpu::Cpu;
 use metalboy::graphics::Graphics;
+use std::env;
+use std::process;
 extern crate minifb;
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
 
@@ -12,6 +14,11 @@ const CLOCK_SPEED: usize = 4194304;
 fn main() {
     // Initialise the logger
     env_logger::init();
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        println!("You must provide a ROM file");
+        process::exit(-1);
+    }
 
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
@@ -36,10 +43,7 @@ fn main() {
 
     // Create CPU
     let mut cpu = Cpu::new();
-    // cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/06-ld r,r.gb");
-    cpu.mmu.cartridge.load("gb-test-roms/cpu_instrs/individual/09-op r,r.gb");
-    // cpu.mmu.cartridge.load("test.gb");
-    // cpu.mmu.cartridge.load("tetris.gb");
+    cpu.mmu.cartridge.load(&args[1]);
     cpu.mmu.load_bootrom("dmg_boot.bin");
     // cpu.mmu.load_bootrom("bootix_dmg.bin");
 
@@ -48,9 +52,9 @@ fn main() {
     // Emulation loop
     let mut cycles = 0;
     let mut instr_count = 0;
-    let mut cycle_count = 0;
+    let mut _cycle_count = 0;
     let max_cycles = CLOCK_SPEED / 60;
-    let _quit_at = 4666608 * 100;
+    let _quit_at = 1269564 * 100;
     let _max_warnings = 1;
 
     'running: while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -79,7 +83,7 @@ fn main() {
                 }
             }
             cycles += cpu.cycles * 4; // FIXME: Is this M-cycles or actual cycles?
-            cycle_count += cycles;
+            _cycle_count += cycles;
             graphics.update(&mut cpu.mmu, cpu.cycles * 4);
             cpu.generate_interrupts();
         }
@@ -91,5 +95,5 @@ fn main() {
     }
 
     println!("Total instructions executed: {}", instr_count);
-    println!("Total cycles: {}", cycle_count);
+    // println!("Total cycles: {}", cycle_count);
 }
