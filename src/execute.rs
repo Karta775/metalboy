@@ -7,7 +7,7 @@ use crate::registers::{R8, R16};
 
 fn op_implemented(cpu: &Cpu) {
     if LOGGING_ENABLED && !cpu.mmu.bootrom_mapped { // TODO: Remove debug code
-        // debug!("I PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
+        // println!("I PC: {:04x} {} [A:{:02X} F:{}] [B:{:02X} C:{:02X}] [D:{:02X} E:{:02X}] [H:{:02X} L:{:02X}] [SP:{:04X}] |",
         //     cpu.reg.pc, decode(cpu).expect("Unknown opcode"),
         //     cpu.reg.a, cpu.reg.f.to_string(), cpu.reg.b, cpu.reg.c, cpu.reg.d, cpu.reg.e, cpu.reg.h, cpu.reg.l, cpu.reg.sp,
         // );
@@ -173,9 +173,9 @@ pub fn execute(cpu: &mut Cpu) {
             }, // LD rr, d16
             0xC7 | 0xD7 | 0xE7 | 0xF7 | 0xCF | 0xDF | 0xEF | 0xFF => {
                 op_implemented(cpu);
-                cpu.advance_pc = 0;
+                cpu.advance_pc = 0; // Don't advance AFTER this instruction
                 cpu.cycles = 4;
-                cpu.push_word(cpu.reg.pc);
+                cpu.push_word(cpu.reg.pc + 1); // Advance the return pointer by one
                 cpu.reg.pc = (cpu.opcode - 0xC7) as u16;
             }, // RST
             0x04 | 0x14 | 0x24 | 0x34 | 0x0C | 0x1C | 0x2C | 0x3C => {
