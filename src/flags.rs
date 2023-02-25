@@ -23,12 +23,17 @@ impl Flags {
 
     pub fn half_carry_add_occurred(left: u8, right: u8) -> bool {
         let add = u8::wrapping_add(left & 0xf, right & 0xf);
-        add & 0b0001_0000 > 0
+        add & 0x10 == 0x10
     }
 
     pub fn compute_half_carry_add_u16(&mut self, left: u16, right: u16) {
         let add = u16::wrapping_add(left & 0xfff, right & 0xfff);
         self.half_carry = add & 0x1000 == 0x1000;
+    }
+
+    pub fn half_carry_add_occurred_u16(left: u16, right: u16) -> bool {
+        let add = u16::wrapping_add(left & 0xfff, right & 0xfff);
+        add & 0x1000 == 0x1000
     }
 
     pub fn compute_half_carry_sub(&mut self, left: u8, right: u8) {  // TODO: Remove deprecated code
@@ -38,6 +43,11 @@ impl Flags {
     pub fn half_carry_sub_occurred(left: u8, right: u8) -> bool {
         let sub = u8::wrapping_sub(left & 0xf, right & 0xf);
         sub & 0x10 == 0x10
+    }
+
+    pub fn half_carry_sub_occurred_u16(left: u16, right: u16) -> bool {
+        let sub = u16::wrapping_sub(left & 0xfff, right & 0xfff);
+        sub & 0x1000 == 0x1000
     }
 
     pub fn compute_half_carry_sub_u16(&mut self, left: u16, right: u16) { // FIXME: Broken impl

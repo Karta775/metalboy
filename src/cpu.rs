@@ -2,7 +2,7 @@ use crate::execute::execute;
 use super::registers::{Registers, R8, R16};
 use super::flags::Flags;
 use super::mmu::Mmu;
-use crate::{bytes_from, set_bit, unset_bit};
+use crate::{bytes_from, set_bit, unset_bit, word_from};
 
 pub enum Interrupt {
     VBlank = 0x40,
@@ -76,7 +76,11 @@ impl Cpu {
         self.mmu.get(self.reg.pc + offset)
     }
 
-    pub fn get_reg(&mut self, index: u8) -> u8 {
+    pub fn get_d16(&self) -> u16 {
+        word_from(self.get_op(2), self.get_op(1))
+    }
+
+    pub fn get_reg8_by_index(&mut self, index: u8) -> u8 {
         match index {
             0 => self.reg.b,
             1 => self.reg.c,
@@ -90,6 +94,36 @@ impl Cpu {
         }
     }
 
+    pub fn get_reg16(&mut self, reg: R16) -> u16 {
+        match reg {
+            R16::BC => self.reg.bc(),
+            R16::DE => self.reg.de(),
+            R16::HL => self.reg.hl(),
+            R16::SP => self.reg.sp,
+            _ => panic!("This is supposed to be unreachable"),
+        }
+    }
+
+    pub fn set_reg16(&mut self, reg: R16, word: u16) {
+        match reg {
+            R16::BC => self.reg.set_bc(word),
+            R16::DE => self.reg.set_de(word),
+            R16::HL => self.reg.set_hl(word),
+            R16::SP => self.reg.set_sp(word),
+            _ => panic!("This is supposed to be unreachable"),
+        }
+    }
+
+    pub fn set_reg16_by_index(&mut self, index: u8, word: u16) {
+        match index {
+            0 => self.reg.set_bc(word),
+            1 => self.reg.set_de(word),
+            2 => self.reg.set_hl(word),
+            3 => self.reg.sp = word,
+            _ => panic!("This is supposed to be unreachable"),
+        }
+    }
+
     pub fn get_reg8_mut(&mut self, reg: R8) -> &mut u8 {
         match reg {
             R8::A => &mut self.reg.a,
@@ -99,8 +133,14 @@ impl Cpu {
             R8::E => &mut self.reg.e,
             R8::H => &mut self.reg.h,
             R8::L => &mut self.reg.l,
-            R8::HLRam => self.mmu.memory.get_mut(self.reg.hl() as usize).unwrap(),
+            // R8::HLRam => self.mmu.memory.get_mut(self.reg.hl() as usize).unwrap(),
+            R8::HLRam => self.mmu.get_mut(self.reg.hl()),
         }
+    }
+
+    pub fn set_op_attrs(&mut self, advance_pc: i16, cycles: usize) {
+        self.advance_pc = advance_pc;
+        self.cycles = cycles;
     }
 
     pub fn set_reg(&mut self, index: u8, value: u8) {
@@ -124,11 +164,56 @@ impl Cpu {
         self.reg.sp -= 2;
     }
 
+    pub fn inc(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let h = Flags::half_carry_add_occurred(*reg, 1);
+        *reg = u8::wrapping_add(*reg, 1);
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = false;
+        self.reg.f.half_carry = h;
+    }
+
+    pub fn inc_rr(&mut self, reg: R16) {
+        let reg_val = self.get_reg16(reg);
+        let result = u16::wrapping_add(reg_val, 1);
+        self.set_reg16(reg, result);
+    }
+
+    pub fn dec(&mut self, reg: R8) {
+        let reg = self.get_reg8_mut(reg);
+        let h = Flags::half_carry_sub_occurred(*reg, 1);
+        *reg = u8::wrapping_sub(*reg, 1);
+        self.reg.f.zero = *reg == 0;
+        self.reg.f.sub = true;
+        self.reg.f.half_carry = h;
+    }
+
+    pub fn dec_rr(&mut self, reg: R16) {
+        let reg_val = self.get_reg16(reg);
+        let result = u16::wrapping_sub(reg_val, 1);
+        self.set_reg16(reg, result);
+    }
+
     pub fn sub(&mut self, byte: u8) {
         self.reg.f.compute_half_carry_sub(self.reg.a, byte);
         (self.reg.a, self.reg.f.carry) = u8::overflowing_sub(self.reg.a, byte);
         self.reg.f.sub = true;
         self.reg.f.zero = self.reg.a == 0;
+    }
+
+    pub fn add_sp_s8(&mut self, byte: i8) {
+        let sp_old_lo = (self.reg.sp & 0xff) as u8;
+        self.reg.sp = if byte > 0 {
+            u16::wrapping_add(self.reg.sp, byte as u16)
+        } else {
+             u16::wrapping_sub(self.reg.sp, (byte * -1) as u16)
+        };
+        let sp_new_lo = (self.reg.sp & 0xff) as u8;
+        self.reg.f.zero = false;
+        self.reg.f.sub = false;
+        self.reg.f.carry = sp_new_lo < sp_old_lo;
+        self.reg.f.half_carry = Flags::half_carry_sub_occurred(sp_new_lo, byte as u8);
+        // FIXME: Why does this only work with half_carry_sub_occurred, and not add?
     }
 
     pub fn sbc(&mut self, byte: u8) {

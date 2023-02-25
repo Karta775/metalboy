@@ -26,6 +26,7 @@ impl R8 {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum R16 {
     AF,
     BC,
@@ -33,6 +34,18 @@ pub enum R16 {
     HL,
     SP,
     PC
+}
+
+impl R16 {
+    pub fn from_spec(index: u8) -> Self {
+        match index {
+            0 => Self::BC,
+            1 => Self::DE,
+            2 => Self::HL,
+            3 => Self::SP,
+            _ => panic!("This is supposed to be unreachable"),
+        }
+    }
 }
 
 pub struct Registers {
@@ -108,6 +121,10 @@ impl Registers {
         let (h,l) = bytes_from(word);
         self.h = h;
         self.l = l;
+    }
+
+    pub fn set_sp(&mut self, word: u16) {
+        self.sp = word;
     }
 
     pub fn inc_hl_nf(&mut self) {

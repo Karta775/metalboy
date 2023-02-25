@@ -67,6 +67,33 @@ impl Mmu {
         }
     }
 
+    pub fn get_mut(&mut self, address: u16) -> &mut u8 {
+        let split_address = address as usize % 0x8000;
+        if self.bootrom_mapped {
+            match address {
+                0x00..=0xFF => return &mut self.bootrom[split_address],
+                _ => ()
+            }
+        }
+        #[allow(unreachable_patterns)]
+        match address {
+            0xFF44 => panic!("Not supposed to happen"), // TODO: Remove debug code
+            0x0000..=0x3FFF => &mut self.cartridge.data[split_address], // 16KB ROM bank 00
+            0x4000..=0x7FFF => &mut self.cartridge.data[split_address], // 16KB ROM Bank 01~NN
+            0x8000..=0x9FFF => &mut self.memory[split_address], // 8KB Video RAM (VRAM)
+            0xA000..=0xBFFF => &mut self.memory[split_address], // 8KB External RAM
+            0xC000..=0xCFFF => &mut self.memory[split_address], // 4KB Work RAM (WRAM) bank 0
+            0xD000..=0xDFFF => &mut self.memory[split_address], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
+            0xE000..=0xFDFF => {panic!("Reading non-existent memory: ({:04x}) ECHO RAM", address); }, // Mirror of C000~DDFF (ECHO RAM)
+            0xFE00..=0xFE9F => &mut self.memory[split_address], // Sprite attribute table (OAM)
+            0xFEA0..=0xFEFF => {panic!("Reading non-existent memory: ({:04x}) UNUSABLE", address); }, // Not usable
+            0xFF00..=0xFF7F => &mut self.memory[split_address], // I/O Registers
+            0xFF80..=0xFFFE => &mut self.memory[split_address], // High RAM (HRAM)
+            0xFFFF => &mut self.memory[split_address], // Interrupts Enable Register (IE)
+            _ => panic!(":(") // Clion requires this catch-all even though the match is exhaustive :(
+        }
+    }
+
     pub fn set(&mut self, address: u16, byte: u8) {
         let split_address = address as usize % 0x8000;
         #[allow(unreachable_patterns)]
