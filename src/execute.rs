@@ -1,4 +1,4 @@
-use super::cpu::Cpu;
+use super::cpu::{Cpu, NORMAL_TIMINGS, CB_TIMINGS};
 use super::decode::decode;
 use log::warn;
 use crate::flags::Flags;
@@ -33,6 +33,7 @@ pub fn execute(cpu: &mut Cpu) {
     if cpu.opcode == 0xCB {
         cpu.cb_prefix = true;
         cpu.opcode = cpu.mmu.get(cpu.reg.pc + 1);
+        cpu.cycles = CB_TIMINGS[cpu.opcode as usize];
         cpu.advance_pc = 2; // Every CB instruction is 2 bytes
 
         // Get the appropriate register based on the instruction set layout
@@ -75,18 +76,24 @@ pub fn execute(cpu: &mut Cpu) {
     }
     else {
         cpu.cb_prefix = false;
+        cpu.cycles = NORMAL_TIMINGS[cpu.opcode as usize];
         match cpu.opcode {
+            0x76 => {
+                op_unimplemented(cpu);
+                cpu.set_op_attrs(1, 1);
+            }
             0x40..=0x7F => {
                 op_implemented(cpu);
                 cpu.advance_pc = 1;
                 cpu.cycles = 1;
                 let reg_1_no = (cpu.opcode - 0x40) / 0x08;
                 let reg_2_no = (cpu.opcode & 0x0F) % 8;
-                let value = cpu.get_reg8_by_index(reg_2_no);
-                cpu.set_reg(reg_1_no, value);
                 if reg_1_no == 6 || reg_2_no == 6 {
                     cpu.cycles = 2;
                 }
+                let value = cpu.get_reg8_by_index(reg_2_no);
+                cpu.set_reg(reg_1_no, value);
+
             }, // LD r,r
             0x80..=0xBF => {
                 op_implemented(cpu);
@@ -94,6 +101,9 @@ pub fn execute(cpu: &mut Cpu) {
                 cpu.cycles = 1;
                 let op_no = (cpu.opcode - 0x80) / 0x08;
                 let reg_2_no = (cpu.opcode & 0x0F) % 8;
+                if reg_2_no == 6 {
+                    cpu.cycles = 2;
+                };
                 let byte = cpu.get_reg8_by_index(reg_2_no);
                 match op_no {
                     0 => add_a_u8(cpu, byte),
@@ -105,9 +115,6 @@ pub fn execute(cpu: &mut Cpu) {
                     6 => cpu.or(byte),
                     7 => cpu.cp(byte),
                     _ => ()
-                };
-                if reg_2_no == 6 {
-                    cpu.cycles = 2;
                 };
             }, // ARITHMETIC r,r
             0xC6 | 0xD6 | 0xE6 | 0xF6 | 0xCE | 0xDE | 0xEE | 0xFE => {
@@ -184,6 +191,7 @@ pub fn execute(cpu: &mut Cpu) {
                 cpu.cycles = 1;
                 let index = (cpu.opcode - 0x04) / 8;
                 let reg = R8::from_spec(index);
+                if reg == R8::HLRam { cpu.cycles = 3; }
                 cpu.inc(reg);
             }, // INC r
             0x03 | 0x13 | 0x23 | 0x33 => {
@@ -200,6 +208,7 @@ pub fn execute(cpu: &mut Cpu) {
                 cpu.cycles = 1;
                 let index = (cpu.opcode - 0x05) / 8;
                 let reg = R8::from_spec(index);
+                if reg == R8::HLRam { cpu.cycles = 3; }
                 cpu.dec(reg);
             }, // DEC r
             0x0B | 0x1B | 0x2B | 0x3B => {
@@ -405,24 +414,24 @@ pub fn srl(reg: &mut u8, flags: &mut Flags) {
 fn execute_00(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
 } // NOP  [-/-/-/-]
 fn execute_02(cpu: &mut Cpu) {
     op_unimplemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
 } // LD (BC) A [-/-/-/-]
 fn execute_06(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.get_op(1);
     ld_d8(&mut cpu.reg.b, byte);
 } // LD B d8 [-/-/-/-]
 fn execute_07(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.rlc(R8::A);
     cpu.reg.f.zero = false;
 } // RLCA  [0/0/0/C]
@@ -438,82 +447,82 @@ fn execute_08(cpu: &mut Cpu) {
 fn execute_09(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     add_hl_u16(cpu, cpu.reg.bc());
 } // ADD HL BC [-/0/H/C]
 fn execute_0a(cpu: &mut Cpu) {
     op_unimplemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
 } // LD A (BC) [-/-/-/-]
 fn execute_0e(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.mmu.get(cpu.reg.pc + 1);
     ld_d8(&mut cpu.reg.c, byte);
 } // LD C d8 [-/-/-/-]
 fn execute_0f(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.rrc(R8::A);
     cpu.reg.f.zero = false;
 } // RRCA  [0/0/0/C]
 fn execute_10(cpu: &mut Cpu) {
     op_unimplemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
 } // STOP 0  [-/-/-/-]
 fn execute_12(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     ld_mem_d8(cpu, cpu.reg.de(), cpu.reg.a);
 } // LD (DE) A [-/-/-/-]
 fn execute_16(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.get_op(1);
     ld_d8(&mut cpu.reg.d, byte);
 } // LD D d8 [-/-/-/-]
 fn execute_17(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     rl_d8(&mut cpu.reg.a, &mut cpu.reg.f);
 } // RLA  [0/0/0/C]
 fn execute_18(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let s8 = cpu.get_op(1) as i8;
     cpu.advance_pc += s8 as i16;
 } // JR r8  [-/-/-/-]
 fn execute_19(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     add_hl_u16(cpu, cpu.reg.de());
 } // ADD HL DE [-/0/H/C]
 fn execute_1a(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     cpu.reg.a = cpu.mmu.get(cpu.reg.de());
 } // LD A (DE) [-/-/-/-]
 fn execute_1e(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.get_op(1);
     ld_d8(&mut cpu.reg.e, byte);
 } // LD E d8 [-/-/-/-]
 fn execute_1f(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     rr(&mut cpu.reg.a, &mut cpu.reg.f);
     cpu.reg.f.zero = false;
 } // RRA  [0/0/0/C]
@@ -532,21 +541,21 @@ fn execute_22(cpu: &mut Cpu) {
     // FIXME: Increment before or after?
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     ld_mem_d8(cpu, cpu.reg.hl(), cpu.reg.a);
     cpu.reg.inc_hl_nf();
 } // LD (HL+) A [-/-/-/-]
 fn execute_26(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.get_op(1);
     ld_d8(&mut cpu.reg.h, byte);
 } // LD H d8 [-/-/-/-]
 fn execute_27(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     let mut correction = 0;
     let a = cpu.reg.a;
 
@@ -583,13 +592,13 @@ fn execute_28(cpu: &mut Cpu) {
 fn execute_29(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     add_hl_u16(cpu, cpu.reg.hl());
 } // ADD HL HL [-/0/H/C]
 fn execute_2a(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.mmu.get(cpu.reg.hl());
     ld_d8(&mut cpu.reg.a, byte);
     cpu.reg.inc_hl_nf();
@@ -597,14 +606,14 @@ fn execute_2a(cpu: &mut Cpu) {
 fn execute_2e(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.get_op(1);
     ld_d8(&mut cpu.reg.l, byte);
 } // LD L d8 [-/-/-/-]
 fn execute_2f(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.reg.a = !cpu.reg.a;
     cpu.reg.f.sub = true;
     cpu.reg.f.half_carry = true;
@@ -622,21 +631,21 @@ fn execute_30(cpu: &mut Cpu) {
 fn execute_32(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     cpu.mmu.set(cpu.reg.hl(), cpu.reg.a);
     cpu.reg.dec_hl_nf(); // FIXME: THis is on the right track for fixing the corrupted logo
 } // LD (HL-) A [-/-/-/-]
 fn execute_36(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let byte = cpu.get_op(1);
     ld_mem_d8(cpu, cpu.reg.hl(), byte);
 } // LD (HL) d8 [-/-/-/-]
 fn execute_37(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.reg.f.sub = false;
     cpu.reg.f.half_carry = false;
     cpu.reg.f.carry = true;
@@ -653,25 +662,25 @@ fn execute_38(cpu: &mut Cpu) {
 fn execute_39(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     add_hl_u16(cpu, cpu.reg.sp);
 } // ADD HL SP [-/0/H/C]
 fn execute_3a(cpu: &mut Cpu) {
     op_unimplemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
 } // LD A (HL-) [-/-/-/-]
 fn execute_3e(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let byte = cpu.get_op(1);
     ld_d8(&mut cpu.reg.a, byte);
 } // LD A d8 [-/-/-/-]
 fn execute_3f(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.reg.f.sub = false;
     cpu.reg.f.half_carry = false;
     cpu.reg.f.carry = !cpu.reg.f.carry;
@@ -689,7 +698,7 @@ fn execute_c0(cpu: &mut Cpu) {
 fn execute_c1(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let word = pop_word(cpu);
     cpu.reg.set_bc(word);
 } // POP BC  [-/-/-/-]
@@ -703,7 +712,7 @@ fn execute_c3(cpu: &mut Cpu) {
 fn execute_c5(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     cpu.push_word(cpu.reg.bc());
 } // PUSH BC  [-/-/-/-]
 fn execute_c8(cpu: &mut Cpu) {
@@ -719,18 +728,18 @@ fn execute_c8(cpu: &mut Cpu) {
 fn execute_c9(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 0;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     cpu.reg.pc = pop_word(cpu);
 } // RET  [-/-/-/-]
 fn execute_cb(cpu: &mut Cpu) {
     op_unimplemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
 } // PREFIX CB  [-/-/-/-]
 fn execute_cd(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 3;
-    cpu.cycles += 6;
+    cpu.cycles = 6;
     call_a16(cpu);
 } // CALL a16  [-/-/-/-]
 fn execute_d0(cpu: &mut Cpu) {
@@ -746,14 +755,14 @@ fn execute_d0(cpu: &mut Cpu) {
 fn execute_d1(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let word = pop_word(cpu);
     cpu.reg.set_de(word);
 } // POP DE  [-/-/-/-]
 fn execute_d5(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     cpu.push_word(cpu.reg.de());
 } // PUSH DE  [-/-/-/-]
 fn execute_d8(cpu: &mut Cpu) {
@@ -775,85 +784,85 @@ fn execute_d9(cpu: &mut Cpu) {
 fn execute_e0(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let address = word_from(0xFF, cpu.get_op(1));
     ld_mem_d8(cpu, address, cpu.reg.a);
 } // LDH (a8) A [-/-/-/-]
 fn execute_e1(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let word = pop_word(cpu);
     cpu.reg.set_hl(word);
 } // POP HL  [-/-/-/-]
 fn execute_e2(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     let address = word_from(0xFF, cpu.reg.c);
     cpu.mmu.set(address, cpu.reg.a);
 } // LD (C) A [-/-/-/-]
 fn execute_e5(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     cpu.push_word(cpu.reg.hl());
 } // PUSH HL  [-/-/-/-]
 fn execute_e8(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     let s8 = cpu.get_op(1) as i8;
     cpu.add_sp_s8(s8);
 } // ADD SP r8 [0/0/H/C]
 fn execute_e9(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 0;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.reg.pc = cpu.reg.hl();
 } // JP (HL)  [-/-/-/-]
 fn execute_ea(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 3;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     let address = word_from(cpu.get_op(2), cpu.get_op(1));
     ld_mem_d8(cpu, address, cpu.reg.a);
 } // LD (a16) A [-/-/-/-]
 fn execute_f0(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let address = word_from(0xFF, cpu.get_op(1));
     cpu.reg.a = cpu.mmu.get(address);
 } // LDH A (a8) [-/-/-/-]
 fn execute_f1(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let word = pop_word(cpu);
     cpu.reg.set_af(word);
 } // POP AF  [Z/N/H/C]
 fn execute_f2(cpu: &mut Cpu) {
     op_unimplemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
 } // LD A (C) [-/-/-/-]
 fn execute_f3(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.ime = false;
 } // DI  [-/-/-/-]
 fn execute_f5(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     cpu.push_word(cpu.reg.af());
 } // PUSH AF  [-/-/-/-]
 fn execute_f8(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 2;
-    cpu.cycles += 3;
+    cpu.cycles = 3;
     let old_sp = cpu.reg.sp;
     let s8 = cpu.get_op(1) as i8;
     cpu.add_sp_s8(s8);
@@ -863,20 +872,20 @@ fn execute_f8(cpu: &mut Cpu) {
 fn execute_f9(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 2;
+    cpu.cycles = 2;
     cpu.reg.sp = cpu.reg.hl();
 } // LD SP HL [-/-/-/-]
 fn execute_fa(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 3;
-    cpu.cycles += 4;
+    cpu.cycles = 4;
     let address = word_from(cpu.get_op(2), cpu.get_op(1));
     ld_d8(&mut cpu.reg.a, cpu.mmu.get(address));
 } // LD A (a16) [-/-/-/-]
 fn execute_fb(cpu: &mut Cpu) {
     op_implemented(cpu);
     cpu.advance_pc = 1;
-    cpu.cycles += 1;
+    cpu.cycles = 1;
     cpu.ime = true;
 } // EI  [-/-/-/-]
 

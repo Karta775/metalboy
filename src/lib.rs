@@ -9,6 +9,7 @@ pub mod decode;
 pub mod execute;
 pub mod flags;
 pub mod graphics;
+pub mod timer;
 
 pub const LOGGING_ENABLED: bool = true;
 

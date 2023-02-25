@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use log::error;
 use crate::cartridge::Cartridge;
+use crate::timer::DIV;
 
 pub struct Mmu {
     pub bootrom: [u8; 256],
@@ -109,6 +110,7 @@ impl Mmu {
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
             0xFF00..=0xFF7F => {
                 match address {
+                    DIV => self.memory[split_address] = 0,
                     0xFF46 => self.dma_transfer(byte),
                     _ => self.memory[split_address] = byte
                 }
