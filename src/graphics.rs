@@ -115,8 +115,8 @@ impl Graphics {
 
         // Draw the pixels for the current scanline
         let tile_row: u16 = (y / 8) as u16 * 32;
-        for i in 0..160 {
-            let mut x: u8 = i + scroll_x;
+        for i in 0u8..160 {
+            let mut x: u8 = i.wrapping_add(scroll_x);
             if window_enabled && i >= window_x {
                 x = i - window_x;
             }

@@ -1,5 +1,6 @@
 use crate::check_bit;
 use crate::mmu::Mmu;
+use crate::cpu;
 
 pub const DIV_INC: usize = 16384;
 pub const DIV: u16 = 0xFF04;  // Divider register -- Increments at a rate of DIV_INC Hz
@@ -37,13 +38,11 @@ impl Timer {
     }
 
     pub fn update(&mut self, mmu: &mut Mmu, cycles: usize) {
-        // TODO: Reset (DIV) to 0 when (DIV) is written to by an instruction
-
         // Update DIV
         self.div_cycles += cycles;
-        if self.div_cycles > DIV_INC {
-            self.div_cycles = 0;
-            let div = &mut mmu.memory[DIV as usize - 0x8000];
+        if self.div_cycles >= cpu::CLOCK_SPEED / DIV_INC {
+            self.div_cycles -= cpu::CLOCK_SPEED / DIV_INC;
+            let div = &mut mmu.memory[DIV as usize % 0x8000];
             *div = u8::wrapping_add(*div, 1);
         }
 
@@ -51,8 +50,8 @@ impl Timer {
         let control = mmu.get(TAC);
         if self.tac_enabled(control) {
             self.tima_cycles += cycles;
-            if self.tima_cycles > self.tac_frequency(control) {
-                self.tima_cycles = 0;
+            if self.tima_cycles >= cpu::CLOCK_SPEED / self.tac_frequency(control) {
+                self.tima_cycles -= cpu::CLOCK_SPEED / self.tac_frequency(control);
                 let tima = mmu.get(TIMA);
 
                 // Request an interrupt if TIMA overflows

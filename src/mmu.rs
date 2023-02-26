@@ -58,40 +58,18 @@ impl Mmu {
             0xA000..=0xBFFF => self.memory[split_address], // 8KB External RAM
             0xC000..=0xCFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 0
             0xD000..=0xDFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
-            0xE000..=0xFDFF => {error!("Reading non-existent memory: ({:04x}) ECHO RAM", address);0}, // Mirror of C000~DDFF (ECHO RAM)
+            0xE000..=0xFDFF => self.memory[split_address - 0x2000], // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => self.memory[split_address], // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => {error!("Reading non-existent memory: ({:04x}) UNUSABLE", address);0}, // Not usable
-            0xFF00..=0xFF7F => self.memory[split_address], // I/O Registers
+            0xFF00..=0xFF7F => {
+                match address {
+                    0xFF00 => 0xf,
+                    _ => self.memory[split_address]
+                }
+            }, // I/O Registers
             0xFF80..=0xFFFE => self.memory[split_address], // High RAM (HRAM)
                      0xFFFF => self.memory[split_address], // Interrupts Enable Register (IE)
             _ => 0 // Clion requires this catch-all even though the match is exhaustive :(
-        }
-    }
-
-    pub fn get_mut(&mut self, address: u16) -> &mut u8 {
-        let split_address = address as usize % 0x8000;
-        if self.bootrom_mapped {
-            match address {
-                0x00..=0xFF => return &mut self.bootrom[split_address],
-                _ => ()
-            }
-        }
-        #[allow(unreachable_patterns)]
-        match address {
-            0xFF44 => panic!("Not supposed to happen"), // TODO: Remove debug code
-            0x0000..=0x3FFF => &mut self.cartridge.data[split_address], // 16KB ROM bank 00
-            0x4000..=0x7FFF => &mut self.cartridge.data[split_address], // 16KB ROM Bank 01~NN
-            0x8000..=0x9FFF => &mut self.memory[split_address], // 8KB Video RAM (VRAM)
-            0xA000..=0xBFFF => &mut self.memory[split_address], // 8KB External RAM
-            0xC000..=0xCFFF => &mut self.memory[split_address], // 4KB Work RAM (WRAM) bank 0
-            0xD000..=0xDFFF => &mut self.memory[split_address], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
-            0xE000..=0xFDFF => {panic!("Reading non-existent memory: ({:04x}) ECHO RAM", address); }, // Mirror of C000~DDFF (ECHO RAM)
-            0xFE00..=0xFE9F => &mut self.memory[split_address], // Sprite attribute table (OAM)
-            0xFEA0..=0xFEFF => {panic!("Reading non-existent memory: ({:04x}) UNUSABLE", address); }, // Not usable
-            0xFF00..=0xFF7F => &mut self.memory[split_address], // I/O Registers
-            0xFF80..=0xFFFE => &mut self.memory[split_address], // High RAM (HRAM)
-            0xFFFF => &mut self.memory[split_address], // Interrupts Enable Register (IE)
-            _ => panic!(":(") // Clion requires this catch-all even though the match is exhaustive :(
         }
     }
 
@@ -99,13 +77,13 @@ impl Mmu {
         let split_address = address as usize % 0x8000;
         #[allow(unreachable_patterns)]
         match address {
-            0x0000..=0x3FFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 00", byte, address), // 16KB ROM bank 00
+            0x0000..=0x3FFF => { error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 00", byte, address) }, // 16KB ROM bank 00
             0x4000..=0x7FFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 01~NN", byte, address), // 16KB ROM Bank 01~NN
             0x8000..=0x9FFF => self.memory[split_address] = byte, // 8KB Video RAM (VRAM)
             0xA000..=0xBFFF => self.memory[split_address] = byte, // 8KB External RAM
             0xC000..=0xCFFF => self.memory[split_address] = byte, // 4KB Work RAM (WRAM) bank 0
             0xD000..=0xDFFF => self.memory[split_address] = byte, // 4KB Work RAM (WRAM) bank 1~N // TODO: Banking
-            0xE000..=0xFDFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ECHO RAM", byte, address), // Mirror of C000~DDFF (ECHO RAM)
+            0xE000..=0xFDFF => self.memory[split_address - 0x2000] = byte, // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => self.memory[split_address] = byte , // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
             0xFF00..=0xFF7F => {
@@ -119,6 +97,64 @@ impl Mmu {
                      0xFFFF => self.memory[split_address] = byte, // Interrupts Enable Register (IE)
             _ => {} // Clion requires this catch-all even though the match is exhaustive :(
         }
+    }
+
+    pub fn set_initial_state(&mut self) {
+        self.set(0xFF00, 0xCF);
+        self.set(0xFF01, 0x00);
+        self.set(0xFF02, 0x7E);
+        self.set(0xFF04, 0xAB);
+        self.set(0xFF05, 0x00);
+        self.set(0xFF06, 0x00);
+        self.set(0xFF07, 0xF8);
+        self.set(0xFF0F, 0xE1);
+        self.set(0xFF10, 0x80);
+        self.set(0xFF11, 0xBF);
+        self.set(0xFF12, 0xF3);
+        self.set(0xFF13, 0xFF);
+        self.set(0xFF14, 0xBF);
+        self.set(0xFF16, 0x3F);
+        self.set(0xFF17, 0x00);
+        self.set(0xFF18, 0xFF);
+        self.set(0xFF19, 0xBF);
+        self.set(0xFF1A, 0x7F);
+        self.set(0xFF1B, 0xFF);
+        self.set(0xFF1C, 0x9F);
+        self.set(0xFF1D, 0xFF);
+        self.set(0xFF1E, 0xBF);
+        self.set(0xFF20, 0xFF);
+        self.set(0xFF21, 0x00);
+        self.set(0xFF22, 0x00);
+        self.set(0xFF23, 0xBF);
+        self.set(0xFF24, 0x77);
+        self.set(0xFF25, 0xF3);
+        self.set(0xFF26, 0xF1);
+        self.set(0xFF40, 0x91);
+        self.set(0xFF41, 0x85);
+        self.set(0xFF42, 0x00);
+        self.set(0xFF43, 0x00);
+        self.set(0xFF44, 0x00);
+        self.set(0xFF45, 0x00);
+        self.set(0xFF46, 0xFF);
+        self.set(0xFF47, 0xFC);
+        // self.set(0xFF48, 0x00);
+        // self.set(0xFF49, 0x00);
+        self.set(0xFF4A, 0xFF);
+        self.set(0xFF4B, 0xFF);
+        self.set(0xFF4D, 0xFF);
+        self.set(0xFF4F, 0xFF);
+        self.set(0xFF51, 0xFF);
+        self.set(0xFF52, 0xFF);
+        self.set(0xFF53, 0xFF);
+        self.set(0xFF54, 0xFF);
+        self.set(0xFF55, 0xFF);
+        self.set(0xFF56, 0xFF);
+        self.set(0xFF68, 0xFF);
+        self.set(0xFF69, 0xFF);
+        self.set(0xFF6A, 0xFF);
+        self.set(0xFF6B, 0xFF);
+        self.set(0xFF70, 0xFF);
+        self.set(0xFFFF, 0x00);
     }
 
     pub fn dma_transfer(&mut self, data: u8) {

@@ -1,15 +1,16 @@
 extern crate log;
-use metalboy::cpu::Cpu;
+use metalboy::cpu::{Cpu, CLOCK_SPEED};
 use metalboy::graphics::Graphics;
 use std::env;
 use std::process;
 extern crate minifb;
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
+use metalboy::cpu;
+use metalboy::cpu::Status::InfiniteLoop;
 
 // const SCALE: usize = 3;
 const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
-const CLOCK_SPEED: usize = 4194304;
 
 fn main() {
     // Initialise the logger
@@ -44,8 +45,8 @@ fn main() {
     // Create CPU
     let mut cpu = Cpu::new();
     cpu.mmu.cartridge.load(&args[1]);
-    cpu.mmu.load_bootrom("dmg_boot.bin");
-    // cpu.mmu.load_bootrom("bootix_dmg.bin");
+    // cpu.mmu.load_bootrom("dmg_boot.bin");
+    cpu.mmu.load_bootrom("bootix_dmg.bin");
 
     let mut graphics = Graphics::new();
 
@@ -54,7 +55,7 @@ fn main() {
     let mut instr_count = 0;
     let mut _cycle_count = 0;
     let max_cycles = CLOCK_SPEED / 60;
-    let _quit_at = 1269564 * 100;
+    let _quit_at = 7000000 * 100;
     let _max_warnings = 1;
 
     'running: while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -70,13 +71,13 @@ fn main() {
             .unwrap();
 
         // One second of CPU execution ~ 4194304 cycles
-        while cycles < max_cycles {
+        while cycles < max_cycles && cpu.status != InfiniteLoop {
             cpu.tick(); // Advance the CPU
             if cpu._tmp_warn_count >= _max_warnings {
                 println!("Maximum number of warnings reached!");
                 break 'running;
             }
-            if !cpu.mmu.bootrom_mapped {
+            if !cpu.mmu.bootrom_mapped && cpu.status != cpu::Status::Halt {
                 instr_count += 1;
                 if instr_count >= _quit_at {
                     break 'running;
@@ -84,16 +85,17 @@ fn main() {
             }
             cycles += cpu.cycles * 4; // FIXME: Is this M-cycles or actual cycles?
             _cycle_count += cycles;
+            cpu.timer.update(&mut cpu.mmu, cpu.cycles * 4);
             graphics.update(&mut cpu.mmu, cpu.cycles * 4);
-            cpu.generate_interrupts();
+            cpu.service_interrupts();
         }
         cycles = 0;
-
+        if cpu.status == InfiniteLoop {
+            break 'running;
+        }
         // Missing: Emulate sound
         // Missing: Emulate other software
-        // Missing: Time synchronisation
     }
-
-    println!("Total instructions executed: {}", instr_count);
+    // println!("Total instructions executed: {}", instr_count);
     // println!("Total cycles: {}", cycle_count);
 }

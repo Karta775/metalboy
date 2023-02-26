@@ -1,7 +1,7 @@
 use crate::{word_from, bytes_from};
 use crate::flags::Flags;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum R8 {
     A,
     B, C,
@@ -125,6 +125,18 @@ impl Registers {
 
     pub fn set_sp(&mut self, word: u16) {
         self.sp = word;
+    }
+
+    pub fn hl_post_inc(&mut self) -> u16 {
+        let old = self.hl();
+        self.set_hl(self.hl().wrapping_add(1));
+        old
+    }
+
+    pub fn hl_post_dec(&mut self) -> u16 {
+        let old = self.hl();
+        self.set_hl(self.hl().wrapping_sub(1));
+        old
     }
 
     pub fn inc_hl_nf(&mut self) {
