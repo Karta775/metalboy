@@ -8,11 +8,11 @@ default-run = "metalboy-debug"
 
 [[bin]]
 name = "metalboy"
-path = "src/frontends/metalboy-minifb.rs"
+path = "src/frontends/minifb/main.rs"
 
 [[bin]]
 name = "metalboy-debug"
-path = "src/frontends/metalboy-egui.rs"
+path = "src/frontends/egui/main.rs"
 
 [dependencies]
 log = "0.4.0"
