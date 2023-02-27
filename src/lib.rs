@@ -10,6 +10,7 @@ pub mod execute;
 pub mod flags;
 pub mod graphics;
 pub mod timer;
+pub mod joypad;
 
 pub const LOGGING_ENABLED: bool = true;
 

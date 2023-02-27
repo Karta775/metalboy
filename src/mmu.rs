@@ -2,7 +2,10 @@ use std::fs::File;
 use std::io::Read;
 use log::error;
 use crate::cartridge::Cartridge;
-use crate::timer::DIV;
+use crate::timer;
+use crate::joypad;
+
+const OFFSET: usize = 0x8000;
 
 pub struct Mmu {
     pub bootrom: [u8; 256],
@@ -43,7 +46,7 @@ impl Mmu {
 
     #[allow(unreachable_patterns)]
     pub fn get(&self, address: u16) -> u8 {
-        let split_address = address as usize % 0x8000;
+        let split_address = address as usize % OFFSET;
         if self.bootrom_mapped {
             match address {
                 0x00..=0xFF => return self.bootrom[split_address],
@@ -63,7 +66,7 @@ impl Mmu {
             0xFEA0..=0xFEFF => {error!("Reading non-existent memory: ({:04x}) UNUSABLE", address);0}, // Not usable
             0xFF00..=0xFF7F => {
                 match address {
-                    0xFF00 => 0xf,
+                    0xFF00 => self.memory[split_address],
                     _ => self.memory[split_address]
                 }
             }, // I/O Registers
@@ -74,7 +77,7 @@ impl Mmu {
     }
 
     pub fn set(&mut self, address: u16, byte: u8) {
-        let split_address = address as usize % 0x8000;
+        let split_address = address as usize % OFFSET;
         #[allow(unreachable_patterns)]
         match address {
             0x0000..=0x3FFF => { error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 00", byte, address) }, // 16KB ROM bank 00
@@ -88,7 +91,12 @@ impl Mmu {
             0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
             0xFF00..=0xFF7F => {
                 match address {
-                    DIV => self.memory[split_address] = 0,
+                    joypad::JOYP => {
+                        let current = self.get(joypad::JOYP);
+                        let new = (byte & 0xf0) | (current & 0x0f);
+                        self.memory[joypad::JOYP as usize % OFFSET] = new;
+                    },
+                    timer::DIV => self.memory[split_address] = 0,
                     0xFF46 => self.dma_transfer(byte),
                     _ => self.memory[split_address] = byte
                 }
@@ -97,6 +105,13 @@ impl Mmu {
                      0xFFFF => self.memory[split_address] = byte, // Interrupts Enable Register (IE)
             _ => {} // Clion requires this catch-all even though the match is exhaustive :(
         }
+    }
+
+    // This method bypasses set()
+    pub fn set_joypad_buttons(&mut self, byte: u8) {
+        let current = self.get(joypad::JOYP);
+        let new = (current & 0xf0) | (byte & 0x0f);
+        self.memory[joypad::JOYP as usize % OFFSET] = new;
     }
 
     pub fn set_initial_state(&mut self) {

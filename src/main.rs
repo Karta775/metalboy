@@ -7,6 +7,7 @@ extern crate minifb;
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
 use metalboy::cpu;
 use metalboy::cpu::Status::InfiniteLoop;
+use metalboy::joypad::{Button, Joypad};
 
 // const SCALE: usize = 3;
 const WIDTH: usize = 160;
@@ -65,6 +66,19 @@ fn main() {
             *pixel = graphics.fb[col][row];
         }
 
+        let mut pressed: Vec<Button> = Vec::new();
+        window.get_keys().iter().for_each(|key| match key {
+            Key::Up => pressed.push(Button::Up),
+            Key::Down => pressed.push(Button::Down),
+            Key::Left => pressed.push(Button::Left),
+            Key::Right => pressed.push(Button::Right),
+            Key::M => pressed.push(Button::A),
+            Key::N => pressed.push(Button::B),
+            Key::J => pressed.push(Button::Start),
+            Key::H => pressed.push(Button::Select),
+            _ => (),
+        });
+
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
         window
             .update_with_buffer(&buffer, WIDTH, HEIGHT)
@@ -87,6 +101,7 @@ fn main() {
             _cycle_count += cycles;
             cpu.timer.update(&mut cpu.mmu, cpu.cycles * 4);
             graphics.update(&mut cpu.mmu, cpu.cycles * 4);
+            Joypad::update(&mut cpu.mmu, &pressed);
             cpu.service_interrupts();
         }
         cycles = 0;

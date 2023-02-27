@@ -40,23 +40,22 @@ impl Graphics {
 
         if self.scanline_count <= 0 {
             self.scanline_count = SCANLINE_RESET;
-            mmu.set(0xFF44, mmu.get(0xFF44) + 1);
             let current_line = mmu.get(0xFF44);
 
             // VBlank Period
             if current_line == 144 {
                 mmu.request_interrupt(0);
             }
-
             // Reset back to scanline 0
             else if current_line > 153 {
                 mmu.set(0xFF44, 0);
             }
-
             // Draw the scanline
             else if current_line < 144 {
                 self.draw_scanline(mmu);
             }
+
+            mmu.set(0xFF44, mmu.get(0xFF44) + 1);
         }
     }
 
@@ -77,9 +76,9 @@ impl Graphics {
         let colour = (left << 1) | right;
 
         match colour {
-            0 => 0xFFFFFF,
-            1 => 0xCCCCCC,
-            2 => 0x777777,
+            0 => 0x8bac0f,
+            1 => 0x306230,
+            2 => 0x0f380f,
             3 => 0x000000,
             _ => panic!("No such colour: {}", colour)
         }
@@ -107,7 +106,7 @@ impl Graphics {
         let y: u8;
         if window_enabled {
             bg_memory = if check_bit(control, 6) { 0x9C00 } else { 0x9800 };
-            y = mmu.get(0xFF44) - window_y;
+            y = mmu.get(0xFF44).wrapping_sub(window_y);
         } else {
             bg_memory = if check_bit(control, 3) { 0x9C00 } else { 0x9800 };
             y = mmu.get(0xFF44).wrapping_add(scroll_y);
@@ -142,7 +141,6 @@ impl Graphics {
             let mut colour_no = check_bit(data_2, colour_bit) as u8;
             colour_no = (colour_no << 1) | (check_bit(data_1, colour_bit) as u8);
 
-            let y = mmu.get(0xFF44);
             let colour = self.get_colour(colour_no, mmu.get(0xFF47));
             self.fb[i as usize][y as usize] = colour;
         }
@@ -196,7 +194,7 @@ impl Graphics {
                     let colour = self.get_colour(colour_no, palette);
 
                     // White should be skipped due to transparency
-                    if colour == 0xFFFFFF {
+                    if colour == 0x8bac0f {
                         continue;
                     }
 
