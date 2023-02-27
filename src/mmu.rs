@@ -63,7 +63,7 @@ impl Mmu {
             0xD000..=0xDFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
             0xE000..=0xFDFF => self.memory[split_address - 0x2000], // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => self.memory[split_address], // Sprite attribute table (OAM)
-            0xFEA0..=0xFEFF => {error!("Reading non-existent memory: ({:04x}) UNUSABLE", address);0}, // Not usable
+            0xFEA0..=0xFEFF => 0, // Not usable
             0xFF00..=0xFF7F => {
                 match address {
                     0xFF00 => self.memory[split_address],
@@ -88,7 +88,7 @@ impl Mmu {
             0xD000..=0xDFFF => self.memory[split_address] = byte, // 4KB Work RAM (WRAM) bank 1~N // TODO: Banking
             0xE000..=0xFDFF => self.memory[split_address - 0x2000] = byte, // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => self.memory[split_address] = byte , // Sprite attribute table (OAM)
-            0xFEA0..=0xFEFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) UNUSABLE", byte, address), // Not usable
+            0xFEA0..=0xFEFF => { }, // Not usable
             0xFF00..=0xFF7F => {
                 match address {
                     joypad::JOYP => {
