@@ -1,12 +1,13 @@
 use std::ops::MulAssign;
-use egui::{Align, Color32, ColorImage, Context, Direction, Image, Layout, TextureFilter, TextureHandle, TextureOptions};
+use egui::{Align, Color32, ColorImage, Context, Direction, Image, Layout, Pos2, TextureFilter, TextureHandle, TextureOptions};
 use log::trace;
 use metalboy::timer;
 use crate::app::App;
 
 impl App {
     pub fn show_tileset(&mut self, egui_ctx: &Context) {
-        egui::Window::new("Tileset").show(egui_ctx, |ui| {
+        egui::Window::new("Tileset").default_pos(Pos2::new(730., 15.))
+            .show(egui_ctx, |ui| {
             let image = self.render().unwrap_or(self.tileset_image.clone());
             let texture = ui.ctx().load_texture(
                 "tileset",
@@ -14,13 +15,14 @@ impl App {
                 TextureOptions::NEAREST,
             );
             let mut size = texture.size_vec2();
-            size.mul_assign(2.0);
+            size.mul_assign(1.5);
             ui.image(&texture, size);
         });
     }
 
     fn render(&mut self) -> Option<ColorImage> {
         let vram = &self.cpu.mmu.memory[0x8000 % 0x8000..0x9800 % 0x8000];
+        // Return if VRAM hasn't changed since the last run
         if vram == self.old_tileset_vram {
             return None;
         } else {
