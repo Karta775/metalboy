@@ -2,5 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/egui-macroquad" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/egui-miniquad" vcs="Git" />
   </component>
 </project>

@@ -16,10 +16,10 @@ path = "src/frontends/egui/main.rs"
 
 [dependencies]
 log = "0.4.0"
-env_logger = "0.9.1"
-minifb = "0.23"
-macroquad = "0.3"
-egui = "0.20.1"
-egui-macroquad = "0.13.0"
-eframe = "0.21.3"
+env_logger = "0.10.0"
+minifb = "0.24.0"
+macroquad = "0.3.25"
+egui = "0.21.0"
+egui-macroquad = { path = "./egui-macroquad", version = "0.15.0" }
+egui-miniquad = { path = "./egui-miniquad", version = "0.14.0" }
 tracing-subscriber = "0.3"

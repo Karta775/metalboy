@@ -15,7 +15,7 @@ impl App {
                 TextureOptions::NEAREST,
             );
             let mut size = texture.size_vec2();
-            size.mul_assign(1.5);
+            size.mul_assign(1.6);
             ui.image(&texture, size);
         });
     }
