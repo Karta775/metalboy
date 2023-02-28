@@ -72,10 +72,10 @@ fn main() {
             Key::Down => pressed.push(Button::Down),
             Key::Left => pressed.push(Button::Left),
             Key::Right => pressed.push(Button::Right),
-            Key::M => pressed.push(Button::A),
-            Key::N => pressed.push(Button::B),
-            Key::J => pressed.push(Button::Start),
-            Key::H => pressed.push(Button::Select),
+            Key::X => pressed.push(Button::A),
+            Key::Z => pressed.push(Button::B),
+            Key::S => pressed.push(Button::Start),
+            Key::A => pressed.push(Button::Select),
             _ => (),
         });
 
