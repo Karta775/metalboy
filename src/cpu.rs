@@ -13,7 +13,7 @@ pub enum Interrupt {
     JOYPAD = 0x60
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Status {
     Stopped,
     Running,

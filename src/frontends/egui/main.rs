@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod app;
+mod common;
+mod state;
+mod tileset;
+
 use macroquad::prelude::*;
 use app::App;
 extern crate log;
@@ -8,6 +12,9 @@ use metalboy::cpu::CLOCK_SPEED;
 use metalboy::graphics::Graphics;
 use std::env;
 use std::process;
+use egui::Color32;
+use egui::style::{Selection, Visuals};
+use common::*;
 
 extern crate minifb;
 use metalboy::cpu::Status::InfiniteLoop;
@@ -15,7 +22,7 @@ use metalboy::joypad::{Button, Joypad};
 
 const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
-const BORDER_SIZE: f32 = 3.0;
+const BORDER_SIZE: f32 = 2.0;
 
 const KEY_MAP: [(KeyCode, Button); 8] = [
     (KeyCode::Up,    Button::Up),
@@ -51,7 +58,8 @@ async fn main() {
 
     let mut app = App::new();
     app.cpu.mmu.cartridge.load(&args[1]);
-    app.cpu.mmu.load_bootrom("bootix_dmg.bin");
+    // app.cpu.mmu.load_bootrom("bootix_dmg.bin");
+    app.cpu.mmu.load_bootrom("dmg_boot.bin");
     let mut graphics = Graphics::new();
 
     // Emulation loop
@@ -64,15 +72,19 @@ async fn main() {
     // Set up texture for macroquad
     let mut texture = fb_to_texture2d(&graphics.fb);
     texture.set_filter(FilterMode::Nearest);
-    set_camera(&Camera2D {
-        zoom: vec2(8.0 / screen_width(), 8.0 / screen_height()),
-        target: vec2(WIDTH as f32 / 2., WIDTH as f32 / 2.),
-        ..Default::default()
+
+
+    // Setup
+    egui_macroquad::ui(|ctx| {
+        setup_custom_fonts(&ctx);
+        let mut style: egui::Style = (*ctx.style()).clone();
+        style.visuals.selection.bg_fill = SELECTED_BG_FILL;
+        ctx.set_style(style);
     });
 
     loop {
         egui_macroquad::ui(|egui_ctx| {
-            app.show_controls(&egui_ctx);
+            app.draw_windows(&egui_ctx);
         });
 
         // Get key presses
@@ -84,7 +96,7 @@ async fn main() {
         }
 
         // Emulation loop for 1/60 of the CPU clock
-        while cycles < max_cycles && app.cpu.status != InfiniteLoop {
+        while cycles < CLOCK_SPEED / 60 && app.cpu.status != InfiniteLoop {
             app.cpu.tick(); // Advance the CPU
             cycles += app.cpu.cycles * 4;
             _cycle_count += cycles;
@@ -98,18 +110,20 @@ async fn main() {
         // Render everything
         texture = fb_to_texture2d(&graphics.fb);
         clear_background(BLACK);
+        set_camera(&Camera2D {
+            zoom: vec2(4.0 / screen_width(), 4.0 / screen_height()),
+            target: vec2((WIDTH / 2) as f32, (HEIGHT / 2) as f32),
+            ..Default::default()
+        });
         draw_rectangle(-BORDER_SIZE, -BORDER_SIZE,
                        WIDTH as f32 + BORDER_SIZE * 2.,
                        HEIGHT as f32 + BORDER_SIZE * 2.,
                        DARKGRAY
         );
-        draw_texture_ex(texture,
-                        0.0,
-                        0.0,
-                        WHITE,
+        draw_texture_ex(texture, 0.0, 0.0, WHITE,
                         DrawTextureParams{
                             flip_y: true,
-                            ..DrawTextureParams::default()
+                            ..Default::default()
                         }
         );
         egui_macroquad::draw();
@@ -135,4 +149,27 @@ fn fb_to_texture2d(framebuffer: &[[u32; 144]; 160]) -> Texture2D {
     let texture = Texture2D::from_rgba8(WIDTH as u16, HEIGHT as u16, &bytes);
     texture.set_filter(FilterMode::Nearest);
     texture
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    fonts.font_data.insert(
+        "JetBrains Mono".to_owned(),
+        egui::FontData::from_static(include_bytes!("fonts/JetBrainsMono/fonts/ttf/JetBrainsMono-Regular.ttf")),
+    );
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "JetBrains Mono".to_owned());
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("JetBrains Mono".to_owned());
+
+    ctx.set_fonts(fonts);
 }

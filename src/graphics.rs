@@ -141,8 +141,11 @@ impl Graphics {
             let mut colour_no = check_bit(data_2, colour_bit) as u8;
             colour_no = (colour_no << 1) | (check_bit(data_1, colour_bit) as u8);
 
-            let colour = self.get_colour(colour_no, mmu.get(0xFF47));
-            self.fb[i as usize][y as usize] = colour;
+            let y = mmu.get(0xFF44);
+            if y < 144 {
+                let colour = self.get_colour(colour_no, mmu.get(0xFF47));
+                self.fb[i as usize][y as usize] = colour;
+            }
         }
     }
 
@@ -153,13 +156,8 @@ impl Graphics {
 
         for sprite in 0..40 {
             let index = sprite * 4;
-            // let y = mmu.get(0xFE00 + index) - 16;
-            // FIXME: DEBUGGING
-            let (y, cancel) = mmu.get(0xFE00 + index).overflowing_sub(16);
-            if cancel {
-                continue;
-            }
-            let x = mmu.get(0xFE00 + index + 1) - 8;
+            let y = mmu.get(0xFE00 + index).wrapping_sub(16);
+            let x = mmu.get(0xFE00 + index + 1).wrapping_sub(8);
             let tile_location = mmu.get(0xFE00 + index + 2);
             let attributes = mmu.get(0xFE00 + index + 3);
 
