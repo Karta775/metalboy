@@ -4,6 +4,10 @@ mod app;
 mod common;
 mod state;
 mod tileset;
+mod control;
+mod gameboy_view;
+mod log_view;
+mod menubar;
 
 use macroquad::prelude::*;
 use app::App;
@@ -60,7 +64,6 @@ async fn main() {
     app.cpu.mmu.cartridge.load(&args[1]);
     // app.cpu.mmu.load_bootrom("bootix_dmg.bin");
     app.cpu.mmu.load_bootrom("dmg_boot.bin");
-    let mut graphics = Graphics::new();
 
     // Emulation loop
     let mut cycles = 0;
@@ -70,9 +73,8 @@ async fn main() {
     let _max_warnings = 1;
 
     // Set up texture for macroquad
-    let mut texture = fb_to_texture2d(&graphics.fb);
+    let mut texture = fb_to_texture2d(&app.graphics.fb);
     texture.set_filter(FilterMode::Nearest);
-
 
     // Setup
     egui_macroquad::ui(|ctx| {
@@ -96,19 +98,20 @@ async fn main() {
         }
 
         // Emulation loop for 1/60 of the CPU clock
-        while cycles < CLOCK_SPEED / 60 && app.cpu.status != InfiniteLoop {
+        while cycles < CLOCK_SPEED / 60 && app.cpu.status != InfiniteLoop && !app.pause_execution || (app.pause_execution && app.step) {
+            app.step = false;
             app.cpu.tick(); // Advance the CPU
             cycles += app.cpu.cycles * 4;
             _cycle_count += cycles;
             app.cpu.timer.update(&mut app.cpu.mmu, app.cpu.cycles * 4);
-            graphics.update(&mut app.cpu.mmu, app.cpu.cycles * 4);
+            app.graphics.update(&mut app.cpu.mmu, app.cpu.cycles * 4);
             Joypad::update(&mut app.cpu.mmu, &pressed);
             app.cpu.service_interrupts();
         }
         cycles = 0;
 
         // Render everything
-        texture = fb_to_texture2d(&graphics.fb);
+        texture = fb_to_texture2d(&app.graphics.fb);
         clear_background(BLACK);
         set_camera(&Camera2D {
             zoom: vec2(4.0 / screen_width(), 4.0 / screen_height()),

@@ -20,6 +20,10 @@ impl App {
                 self.label_bold("SP:", ui);
                 ui.label(format!("{:02X} ", self.cpu.reg.sp));
             });
+            ui.horizontal_wrapped(|ui| {
+                self.label_bold("NEXT OP:", ui);
+                ui.label(format!("{:02X} ", self.cpu.mmu.get(self.cpu.reg.pc + 1)));
+            });
             ui.separator();
 
             // Timers
@@ -74,6 +78,46 @@ impl App {
                     ));
                 });
             });
+
+
+            // Columnar view of register values and set flags
+            self.header("Interrupts", ui);
+            let int_enable = self.cpu.mmu.get(0xFFFF);
+            let int_flag = self.cpu.mmu.get(0xFF0F);
+            ui.columns(2, |columns| {
+                columns[0].with_layout(egui::Layout::top_down(Align::Center), |ui| {
+                    ui.add_enabled(false, egui::SelectableLabel::new(
+                        self.cpu.ime,
+                        "IME"
+                    ));
+                    ui.add_enabled(false, egui::SelectableLabel::new(
+                        check_bit(int_enable, 1),
+                        "LCD STAT"
+                    ));
+                    ui.add_enabled(false, egui::SelectableLabel::new(
+                        check_bit(int_enable, 3),
+                        "Serial"
+                    ));
+                });
+                columns[1].with_layout(egui::Layout::top_down(Align::TOP), |ui| {
+                    ui.add_enabled(false, egui::SelectableLabel::new(
+                        check_bit(int_enable, 0),
+                        "VBlank"
+                    ));
+                    ui.add_enabled(false, egui::SelectableLabel::new(
+                        check_bit(int_enable, 2),
+                        "Timer"
+                    ));
+                    ui.add_enabled(false, egui::SelectableLabel::new(
+                        check_bit(int_enable, 4),
+                        "Joypad"
+                    ));
+                });
+            });
         });
     }
+}
+
+fn check_bit(byte: u8, bit: u8) -> bool {
+    (byte >> bit) & 1 == 1
 }
