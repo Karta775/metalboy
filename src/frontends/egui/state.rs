@@ -7,7 +7,7 @@ impl App {
         egui::Window::new("General State").show(egui_ctx, |ui| {
             ui.set_max_width(210.);
 
-            // General
+            // CPU
             ui.horizontal_wrapped(|ui| {
                 self.header("CPU Info", ui);
                 ui.label(format!("({:?})", self.cpu.status));
@@ -23,6 +23,17 @@ impl App {
             ui.horizontal_wrapped(|ui| {
                 self.label_bold("NEXT OP:", ui);
                 ui.label(format!("{:02X} ", self.cpu.mmu.get(self.cpu.reg.pc + 1)));
+            });
+            ui.separator();
+
+            // MMU
+            ui.horizontal_wrapped(|ui| {
+                self.header("MMU Info", ui);
+                ui.label(format!("(Cart uses MBC{})", self.cpu.mmu.cartridge.mbc));
+            });
+            ui.horizontal_wrapped(|ui| {
+                self.label_bold("ROM BANK:", ui);
+                ui.label(format!("{:02X} ", self.cpu.mmu.rom_bank));
             });
             ui.separator();
 

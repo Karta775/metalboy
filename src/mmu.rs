@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::fs::File;
 use std::io::Read;
 use log::error;
@@ -17,6 +18,7 @@ pub struct Mmu {
     pub hram: [u8; 128],
     pub oam: [u8; 0xA0],
     pub memory: [u8; 0x8000],
+    pub rom_bank: usize,
 }
 
 impl Mmu {
@@ -32,6 +34,7 @@ impl Mmu {
             hram: [0; 128],
             oam: [0; 0xA0],
             memory: [0; 0x8000],
+            rom_bank: 1,
         }
     }
 
@@ -56,7 +59,7 @@ impl Mmu {
         match address {
             // 0xFF44 => 0x90, // TODO: Remove debug code
             0x0000..=0x3FFF => self.cartridge.data[split_address], // 16KB ROM bank 00
-            0x4000..=0x7FFF => self.cartridge.data[split_address], // 16KB ROM Bank 01~NN
+            0x4000..=0x7FFF => self.cartridge.data[split_address + ((self.rom_bank - 1) * 0x4000)], // 16KB ROM Bank 01~NN
             0x8000..=0x9FFF => self.memory[split_address], // 8KB Video RAM (VRAM)
             0xA000..=0xBFFF => self.memory[split_address], // 8KB External RAM
             0xC000..=0xCFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 0
@@ -80,8 +83,9 @@ impl Mmu {
         let split_address = address as usize % OFFSET;
         #[allow(unreachable_patterns)]
         match address {
-            0x0000..=0x3FFF => { error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 00", byte, address) }, // 16KB ROM bank 00
-            0x4000..=0x7FFF => error!("Writing to non-existent memory: {:02x} -> ({:04x}) ROM 01~NN", byte, address), // 16KB ROM Bank 01~NN
+            0x0000..=0x1FFF => {}, // 16KB ROM bank 00
+            0x2000..=0x3FFF => self.rom_bank_switch(byte), // ROM bank select
+            0x4000..=0x7FFF => {}, // 16KB ROM Bank 01~NN
             0x8000..=0x9FFF => self.memory[split_address] = byte, // 8KB Video RAM (VRAM)
             0xA000..=0xBFFF => self.memory[split_address] = byte, // 8KB External RAM
             0xC000..=0xCFFF => self.memory[split_address] = byte, // 4KB Work RAM (WRAM) bank 0
@@ -104,6 +108,15 @@ impl Mmu {
             0xFF80..=0xFFFE => self.memory[split_address] = byte, // High RAM (HRAM)
                      0xFFFF => self.memory[split_address] = byte, // Interrupts Enable Register (IE)
             _ => {} // Clion requires this catch-all even though the match is exhaustive :(
+        }
+    }
+
+    fn rom_bank_switch(&mut self, byte: u8) {
+        let byte = byte as usize;
+        if self.cartridge.mbc == 1 { // If MBC1 is enabled
+            self.rom_bank &= 0b11100000; // Discard right 5 bits
+            self.rom_bank |= (byte & 0b00011111); // Get new right 5 bits from set() data
+            self.rom_bank = max(self.rom_bank, 1); // 0 is not allowed
         }
     }
 
