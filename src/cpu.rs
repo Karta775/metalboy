@@ -10,6 +10,7 @@ pub enum Interrupt {
     VBlank = 0x40,
     LCD = 0x48,
     TIMER = 0x50,
+    SERIAL = 0x58,
     JOYPAD = 0x60
 }
 
@@ -23,6 +24,9 @@ pub enum Status {
 
 pub const CLOCK_SPEED: usize = 4194304;
 
+/* The following array is based on data from:
+   https://github.com/retrio/gb-test-roms/tree/master/instr_timing
+ */
 pub const NORMAL_TIMINGS: [usize; 256] = [
     1,3,2,2,1,1,2,1,5,2,2,2,1,1,2,1,
     0,3,2,2,1,1,2,1,3,2,2,2,1,1,2,1,
@@ -42,6 +46,9 @@ pub const NORMAL_TIMINGS: [usize; 256] = [
     3,3,2,1,0,4,2,4,3,2,4,1,0,0,2,4
 ];
 
+/* The following array is based on data from:
+   https://github.com/retrio/gb-test-roms/tree/master/instr_timing
+ */
 pub const CB_TIMINGS: [usize; 256] = [
     2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
     2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
@@ -93,6 +100,9 @@ impl Cpu {
     pub fn reset(&mut self) {
         self.reg.reset();
         self.mmu.reset();
+        if !self.mmu.bootrom_mapped {
+            self.reg.pc = 0x100;
+        }
         self.opcode = 0x00;
         self.advance_pc = 1;
         self.cycles = 0;
@@ -452,10 +462,11 @@ impl Cpu {
 
         self.push_word(self.reg.pc);
         match id {
-            0 => self.reg.pc = Interrupt::VBlank as u16,
-            1 => self.reg.pc = Interrupt::LCD as u16,
-            2 => self.reg.pc = Interrupt::TIMER as u16,
-            4 => self.reg.pc = Interrupt::JOYPAD as u16,
+            0 => self.reg.pc = Interrupt::VBlank as u16, // 0x40
+            1 => self.reg.pc = Interrupt::LCD as u16,    // 0x48
+            2 => self.reg.pc = Interrupt::TIMER as u16,  // 0x50
+            3 => self.reg.pc = Interrupt::SERIAL as u16, // 0x58
+            4 => self.reg.pc = Interrupt::JOYPAD as u16, // 0x60
             _ => ()
         }
     }
@@ -466,14 +477,16 @@ impl Cpu {
         if self.status == Halt && (interrupt_flag & interrupt_enable > 0) {
             self.status = Running;
         }
-        if self.ime {
-            if interrupt_flag > 0 { // Any interrupts are set
-                for i in 0..5 {
-                    if ((interrupt_flag & interrupt_enable) >> i) & 1 == 1 { // Interrupt 'i' is set
-                        self.service_interrupt(i, interrupt_flag);
-                        break; // FIXME: Is this the correct behaviour?
-                    }
-                }
+        // Guards
+        if !self.ime || interrupt_flag == 0 {
+            return;
+        }
+        // Service the next interrupt
+        for i in 0..5 {
+            // If interrupt 'i' is set
+            if ((interrupt_flag & interrupt_enable) >> i) & 1 == 1 {
+                self.service_interrupt(i, interrupt_flag);
+                break;
             }
         }
     }

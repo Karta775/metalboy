@@ -5,7 +5,7 @@ use crate::app::App;
 impl App {
     pub fn show_state(&mut self, egui_ctx: &Context) {
         egui::Window::new("General State").show(egui_ctx, |ui| {
-            ui.set_max_width(210.);
+            ui.set_max_width(220.);
 
             // CPU
             ui.horizontal_wrapped(|ui| {

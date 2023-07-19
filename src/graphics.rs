@@ -15,8 +15,8 @@ pub struct Graphics {
 }
 
 pub enum TileNumber {
-    Signed(i16),
-    Unsigned(u16)
+    Signed(i8),
+    Unsigned(u8)
 }
 
 impl Graphics {
@@ -113,7 +113,7 @@ impl Graphics {
         }
 
         // Draw the pixels for the current scanline
-        let tile_row: u16 = (y / 8) as u16 * 32;
+        let tile_row: u16 = ((y / 8) as u16) * 32;
         for i in 0u8..160 {
             let mut x: u8 = i.wrapping_add(scroll_x);
             if window_enabled && i >= window_x {
@@ -123,14 +123,14 @@ impl Graphics {
             let tile_column = (x / 8) as u16;
             let tile_address = bg_memory + tile_row + tile_column;
             let tile_no: TileNumber = if unsigned {
-                Unsigned(mmu.get(tile_address) as u16)
+                Unsigned(mmu.get(tile_address) as u8)
             } else {
-                Signed(mmu.get(tile_address) as i16)
+                Signed(mmu.get(tile_address) as i8)
             };
 
             let tile_location: u16 = match tile_no {
-                Unsigned(n) => tile_data + (n.wrapping_mul(16)) as u16,
-                Signed(n) => (tile_data + (((n as u16) + 128) * 16)) as u16
+                Unsigned(n) => tile_data + (u16::wrapping_mul(n as u16, 16)),
+                Signed(n) => tile_data + u16::wrapping_mul(u16::wrapping_add(n as u16, 128), 16)
             };
 
             let line: u8 = (y % 8) * 2;
@@ -142,7 +142,7 @@ impl Graphics {
             colour_no = (colour_no << 1) | (check_bit(data_1, colour_bit) as u8);
 
             let y = mmu.get(0xFF44);
-            if y < 144 {
+            if i < 160 && y < 144 {
                 let colour = self.get_colour(colour_no, mmu.get(0xFF47));
                 self.fb[i as usize][y as usize] = colour;
             }
@@ -161,10 +161,9 @@ impl Graphics {
             let tile_location = mmu.get(0xFE00 + index + 2);
             let attributes = mmu.get(0xFE00 + index + 3);
 
+            let scanline = mmu.get(0xFF44);
             let y_flip = check_bit(attributes, 6);
             let x_flip = check_bit(attributes, 5);
-
-            let scanline = mmu.get(0xFF44);
 
             if scanline >= y && scanline < y + y_size {
                 let mut line = (scanline as i16) - y as i16;
@@ -192,7 +191,7 @@ impl Graphics {
                     let colour = self.get_colour(colour_no, palette);
 
                     // White should be skipped due to transparency
-                    if colour == 0x8bac0f {
+                    if colour_no == 0 {
                         continue;
                     }
 
@@ -200,7 +199,9 @@ impl Graphics {
                     let pixel = x_pixel + x as i16;
 
                     // Draw the pixel to the framebuffer
-                    self.fb[pixel as usize][scanline as usize] = colour;
+                    if pixel < 160 && scanline < 144 {
+                        self.fb[pixel as usize][scanline as usize] = colour;
+                    }
                 }
             }
         }

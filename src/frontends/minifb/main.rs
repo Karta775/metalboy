@@ -31,9 +31,9 @@ fn main() {
         WindowOptions {
             borderless: false,
             title: true,
-            resize: false,
-            scale: Scale::X2,
-            scale_mode: ScaleMode::Stretch,
+            resize: true,
+            scale: Scale::X4,
+            scale_mode: ScaleMode::AspectRatioStretch,
             topmost: false,
             transparency: false,
             none: false,
@@ -46,14 +46,15 @@ fn main() {
     // Create CPU
     let mut cpu = Cpu::new();
     cpu.mmu.cartridge.load(&args[1]);
-    // cpu.mmu.load_bootrom("dmg_boot.bin");
-    cpu.mmu.load_bootrom("bootix_dmg.bin");
+    // cpu.mmu.load_bootrom("bootix_dmg.bin");
+    cpu.reg.pc = 0x100;
+    cpu.mmu.bootrom_mapped = false;
+    cpu.mmu.set_initial_state();
 
     let mut graphics = Graphics::new();
 
     // Emulation loop
     let mut cycles = 0;
-    let mut instr_count = 0;
     let mut _cycle_count = 0;
     let max_cycles = CLOCK_SPEED / 60;
     let _quit_at = 7000000 * 100;
@@ -87,16 +88,6 @@ fn main() {
         // One second of CPU execution ~ 4194304 cycles
         while cycles < max_cycles && cpu.status != InfiniteLoop {
             cpu.tick(); // Advance the CPU
-            if cpu._tmp_warn_count >= _max_warnings {
-                println!("Maximum number of warnings reached!");
-                break 'running;
-            }
-            if !cpu.mmu.bootrom_mapped && cpu.status != cpu::Status::Halt {
-                instr_count += 1;
-                if instr_count >= _quit_at {
-                    break 'running;
-                }
-            }
             cycles += cpu.cycles * 4; // FIXME: Is this M-cycles or actual cycles?
             _cycle_count += cycles;
             cpu.timer.update(&mut cpu.mmu, cpu.cycles * 4);
@@ -105,9 +96,9 @@ fn main() {
             cpu.service_interrupts();
         }
         cycles = 0;
-        if cpu.status == InfiniteLoop {
-            break 'running;
-        }
+        // if cpu.status == InfiniteLoop {
+        //     break 'running;
+        // }
         // Missing: Emulate sound
         // Missing: Emulate other software
     }

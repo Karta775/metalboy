@@ -9,6 +9,7 @@ mod gameboy_view;
 mod log_view;
 mod menubar;
 
+use std::arch::aarch64::int8x8_t;
 use macroquad::prelude::*;
 use app::App;
 extern crate log;
@@ -16,7 +17,9 @@ use metalboy::cpu::CLOCK_SPEED;
 use metalboy::graphics::Graphics;
 use std::env;
 use std::process;
+use std::time::Duration;
 use egui::Color32;
+use egui::epaint::Shadow;
 use egui::style::{Selection, Visuals};
 use common::*;
 
@@ -62,8 +65,15 @@ async fn main() {
 
     let mut app = App::new();
     app.cpu.mmu.cartridge.load(&args[1]);
-    // app.cpu.mmu.load_bootrom("bootix_dmg.bin");
-    app.cpu.mmu.load_bootrom("dmg_boot.bin");
+
+    // Either use a bootrom or initialise manually
+    if args.len() > 2 {
+        app.cpu.mmu.load_bootrom(&args[2]);
+    } else {
+        app.cpu.reg.pc = 0x100;
+        app.cpu.mmu.bootrom_mapped = false;
+        app.cpu.mmu.set_initial_state();
+    }
 
     // Emulation loop
     let mut cycles = 0;
@@ -81,6 +91,7 @@ async fn main() {
         setup_custom_fonts(&ctx);
         let mut style: egui::Style = (*ctx.style()).clone();
         style.visuals.selection.bg_fill = SELECTED_BG_FILL;
+        // style.visuals.window_shadow = Shadow::NONE;
         ctx.set_style(style);
     });
 
@@ -108,6 +119,7 @@ async fn main() {
             Joypad::update(&mut app.cpu.mmu, &pressed);
             app.cpu.service_interrupts();
         }
+        std::thread::sleep(Duration::from_millis(4));
         cycles = 0;
 
         // Render everything

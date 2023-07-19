@@ -33,7 +33,7 @@ impl App {
         let mut image = ColorImage::new([128, 192], Default::default());
         let palette = self.cpu.mmu.get(0xFF47);
 
-        for tile_no in 0..374 {
+        for tile_no in 0..384 {
             // Tiles are 16-bytes in length, tile 0 is at 0x8000, tile 1 is at 0x8010, etc.
             let tile_address = 0x8000 + (tile_no * 0x10);
             let tile_data = &vram[tile_address % 0x8000 .. (tile_address + 0x10) % 0x8000];

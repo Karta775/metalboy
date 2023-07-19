@@ -12,13 +12,8 @@ pub struct Mmu {
     pub bootrom: [u8; 256],
     pub bootrom_mapped: bool,
     pub cartridge: Cartridge,
-    pub vram: [u8; 0x2000],
-    pub wram: [u8; 0x1000],
-    pub io: [u8; 0x80],
-    pub hram: [u8; 128],
-    pub oam: [u8; 0xA0],
     pub memory: [u8; 0x8000],
-    pub rom_bank: usize,
+    pub rom_bank: u8,
 }
 
 impl Mmu {
@@ -28,11 +23,6 @@ impl Mmu {
             bootrom: [0; 256],
             bootrom_mapped: true,
             cartridge: Cartridge::new(),
-            vram: [0; 0x2000],
-            wram: [0; 0x1000],
-            io: [0; 0x80],
-            hram: [0; 128],
-            oam: [0; 0xA0],
             memory: [0; 0x8000],
             rom_bank: 1,
         }
@@ -44,7 +34,10 @@ impl Mmu {
     }
 
     pub fn reset(&mut self) {
-        // TODO: Reset memory to defaults
+        self.set_initial_state();
+        if self.bootrom.gt(&[0;256]) {
+            self.bootrom_mapped = true;
+        }
     }
 
     #[allow(unreachable_patterns)]
@@ -57,13 +50,12 @@ impl Mmu {
             }
         }
         match address {
-            // 0xFF44 => 0x90, // TODO: Remove debug code
             0x0000..=0x3FFF => self.cartridge.data[split_address], // 16KB ROM bank 00
-            0x4000..=0x7FFF => self.cartridge.data[split_address + ((self.rom_bank - 1) * 0x4000)], // 16KB ROM Bank 01~NN
+            0x4000..=0x7FFF => self.cartridge.data[split_address + ((self.rom_bank as usize - 1) * 0x4000)], // 16KB ROM Bank 01~NN
             0x8000..=0x9FFF => self.memory[split_address], // 8KB Video RAM (VRAM)
-            0xA000..=0xBFFF => self.memory[split_address], // 8KB External RAM
-            0xC000..=0xCFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 0
-            0xD000..=0xDFFF => self.memory[split_address], // 4KB Work RAM (WRAM) bank 1~N TODO: Banking
+            0xA000..=0xBFFF => self.memory[split_address], // 8KB External RAM TODO: Banking
+            0xC000..=0xCFFF => self.memory[split_address], // 4KB Work RAM (WRAM)
+            0xD000..=0xDFFF => self.memory[split_address], // 4KB Work RAM (WRAM)
             0xE000..=0xFDFF => self.memory[split_address - 0x2000], // Mirror of C000~DDFF (ECHO RAM)
             0xFE00..=0xFE9F => self.memory[split_address], // Sprite attribute table (OAM)
             0xFEA0..=0xFEFF => 0, // Not usable
@@ -83,7 +75,7 @@ impl Mmu {
         let split_address = address as usize % OFFSET;
         #[allow(unreachable_patterns)]
         match address {
-            0x0000..=0x1FFF => {}, // 16KB ROM bank 00
+            0x0000..=0x1FFF => { if byte == 0x0A { println!("Warning: RAM banking enabled") } }, // 16KB ROM bank 00
             0x2000..=0x3FFF => self.rom_bank_switch(byte), // ROM bank select
             0x4000..=0x7FFF => {}, // 16KB ROM Bank 01~NN
             0x8000..=0x9FFF => self.memory[split_address] = byte, // 8KB Video RAM (VRAM)
@@ -112,11 +104,9 @@ impl Mmu {
     }
 
     fn rom_bank_switch(&mut self, byte: u8) {
-        let byte = byte as usize;
         if self.cartridge.mbc == 1 { // If MBC1 is enabled
-            self.rom_bank &= 0b11100000; // Discard right 5 bits
-            self.rom_bank |= (byte & 0b00011111); // Get new right 5 bits from set() data
-            self.rom_bank = max(self.rom_bank, 1); // 0 is not allowed
+            self.rom_bank = byte & 0b00011111; // Set new rom bank
+            self.rom_bank = max(self.rom_bank, 1); // Must be > 0
         }
     }
 
@@ -165,8 +155,8 @@ impl Mmu {
         self.set(0xFF45, 0x00);
         self.set(0xFF46, 0xFF);
         self.set(0xFF47, 0xFC);
-        // self.set(0xFF48, 0x00);
-        // self.set(0xFF49, 0x00);
+        self.set(0xFF48, 0x00);
+        self.set(0xFF49, 0x00);
         self.set(0xFF4A, 0xFF);
         self.set(0xFF4B, 0xFF);
         self.set(0xFF4D, 0xFF);

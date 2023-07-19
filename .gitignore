@@ -11,3 +11,7 @@ gb-test-roms
 # Ignore the opcodes JSON file
 scripts/opcodes.json
 
+**/*.sym
+**/*.DS_Store
+**/*.sav
+/mts/

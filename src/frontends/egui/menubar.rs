@@ -13,6 +13,9 @@ impl App {
                     if ui.button("Load ROM").clicked() {
 
                     }
+                    if ui.button("Reset system").clicked() {
+                        self.cpu.reset();
+                    }
                 });
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_state_view, "System state");

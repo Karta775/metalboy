@@ -76,11 +76,12 @@ impl Registers {
     }
 
     pub fn reset(&mut self) {
+        self.set_af(0);
         self.set_bc(0);
         self.set_de(0);
         self.set_hl(0);
         self.pc = 0;
-        self.sp = u16::MAX;
+        self.sp = u16::MAX - 1;
     }
 
     pub fn af(&self) -> u16 {
