@@ -1,6 +1,6 @@
 # metalboy
 
-
+![Demo gif](demo.gif)
 
 ### References
 | Thing | Description | License |
